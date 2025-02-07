@@ -1,0 +1,67 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <!--Control colors.-->
+    <SolidColorBrush x:Key="WindowColorBrush">#FFF5F5F5</SolidColorBrush>
+
+    <SolidColorBrush x:Key="DisabledControlLightColorBrush">#FFE5E5E5</SolidColorBrush>
+    <SolidColorBrush x:Key="DisabledControlMediumColorBrush">#FFD4D4D4</SolidColorBrush>
+
+    <SolidColorBrush x:Key="DisabledGlyphColorBrush">#FFA3A3A3</SolidColorBrush>
+    <SolidColorBrush x:Key="DisabledForeGroundLightColorBrush">#FFCCCCCC</SolidColorBrush>
+    <SolidColorBrush x:Key="DisabledForegroundDarkColorBrush">#FF808080</SolidColorBrush>
+
+    <SolidColorBrush x:Key="ControlLightColorBrush">White</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlMediumColorBrush">#FFE5E5E5</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlDarkColorBrush">#FF009BE0</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlGrayColorBrush">Gray</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlLightGrayColorBrush">LightGray</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlHighLightColorBrush">#FFE0F6FF</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlErrorColorBrush">Red</SolidColorBrush>
+
+    <SolidColorBrush x:Key="ControlMouseOverLightColorBrush">#FFEEEEEE</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlMouseOverMediumColorBrush">#FFE0F6FF</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlMouseOverDarkColorBrush">#FF3843C4</SolidColorBrush>
+
+    <SolidColorBrush x:Key="ControlPressedLightColorBrush">#FFD4D4D4</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlPressedDarkColorBrush">#FF211AA9</SolidColorBrush>
+
+    <SolidColorBrush x:Key="ControlErrorLightColorBrush">#FFE4DF</SolidColorBrush>
+    <SolidColorBrush x:Key="ControlErrorMediumColorBrush">#FACEC5</SolidColorBrush>
+
+    <SolidColorBrush x:Key="GlyphLightColorBrush">White</SolidColorBrush>
+    <SolidColorBrush x:Key="GlyphMediumColorBrush">#FFA3A3A3</SolidColorBrush>
+    <SolidColorBrush x:Key="GlyphDarkColorBrush">#FF444444</SolidColorBrush>
+    <SolidColorBrush x:Key="ForegroundDarkColorBrush">Black</SolidColorBrush>
+    <!--Border colors-->
+    <SolidColorBrush x:Key="BorderLightColorBrush">White</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderMediumColorBrush">#FFA3A3A3</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderDarkColorBrush">#FF009BE0</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderLightGrayColorBrush">LightGray</SolidColorBrush>
+    <Color x:Key="BorderDarkColor">#FF009BE0</Color>
+
+    <SolidColorBrush x:Key="DisabledBorderLightColorBrush">#FFD4D4D4</SolidColorBrush>
+    <SolidColorBrush x:Key="DisabledBorderMediumColorBrush">#FFE5E5E5</SolidColorBrush>
+
+    <SolidColorBrush x:Key="BorderPressedColorBrush">#FF211AA9</SolidColorBrush>
+
+    <SolidColorBrush x:Key="DefaultBorderDarkColorBrush">#FF171717</SolidColorBrush>
+
+    <!--Control-specific resources.-->
+    <SolidColorBrush x:Key="DisabledInputTextLightColorBrush">#FFEEEEEE</SolidColorBrush>
+    <SolidColorBrush x:Key="TextBoxMediumColorBrush">#FFE0F2FE</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderComboboxLightColorBrush">#FFD4D4D4</SolidColorBrush>
+    <SolidColorBrush x:Key="BorderDataGridLightColorBrush">#FFD4D4D4</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridSelectedCellColorBrush">#FF5BBAE3</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridFixedCellColorBrush">#FFdeeaf6</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridFreeNumberCellColorBrush">#FFfef2cb</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridFreeStringCellColorBrush">#FFffe598</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridSelectionCellColorBrush">#FFfbe4d5</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridChangeableSelectCellColorBrush">#FFe2efd9</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridChangeableNumberCellColorBrush">#FFc5e0b3</SolidColorBrush>
+    <SolidColorBrush x:Key="DataGridChangeableStringCellColorBrush">#FFa8d08d</SolidColorBrush>
+
+    <SolidColorBrush x:Key="CheckBoxMouseOverMediumColorBrush">#FF5BBAE3</SolidColorBrush>
+    <SolidColorBrush x:Key="ComboBoxMediumColorBrush">#FFEAEAEA</SolidColorBrush>
+    <SolidColorBrush x:Key="IconCheckBoxCheckedColorBrush">#FFF606D0</SolidColorBrush>
+    <SolidColorBrush x:Key="IconCheckBoxUnCheckedColorBrush">#FF999999</SolidColorBrush>
+</ResourceDictionary>

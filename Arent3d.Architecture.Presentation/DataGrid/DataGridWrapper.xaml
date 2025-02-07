@@ -1,0 +1,27 @@
+<UserControl x:Class="Arent3d.Architecture.Presentation.DataGrid.DataGridWrapper"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:b="http://schemas.microsoft.com/xaml/behaviors"
+             xmlns:behaviors="clr-namespace:Arent3d.Architecture.Presentation.Behaviors"
+             mc:Ignorable="d"
+             d:DesignHeight="300" d:DesignWidth="300">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"></RowDefinition>
+            <RowDefinition Height="*"></RowDefinition>
+        </Grid.RowDefinitions>
+        <ScrollViewer x:Name="HeaderScrollViewer" VerticalScrollBarVisibility="Hidden"
+                      HorizontalScrollBarVisibility="Hidden">
+            <Grid x:Name="Header" Margin="1,0,0,0"></Grid>
+        </ScrollViewer>
+        
+        <ScrollViewer Grid.Row="1" x:Name="DataGridScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+            <b:Interaction.Behaviors>
+                <behaviors:SyncHorizontalScrollBehavior TargetScrollViewer="{Binding ElementName=HeaderScrollViewer}"></behaviors:SyncHorizontalScrollBehavior>
+            </b:Interaction.Behaviors>
+            <ContentControl x:Name="ContentControl" />
+        </ScrollViewer>
+    </Grid>
+</UserControl>
