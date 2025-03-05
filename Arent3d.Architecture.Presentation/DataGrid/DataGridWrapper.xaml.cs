@@ -1,22 +1,22 @@
 using System.Windows ;
 using System.Windows.Controls ;
 using System.Windows.Data ;
+using System.Windows.Input ;
 using System.Windows.Media ;
 using Arent3d.Architecture.Presentation.Converters ;
-using Arent3d.Architecture.Presentation.Extensions;
 
 namespace Arent3d.Architecture.Presentation.DataGrid ;
 
 public partial class DataGridWrapper
 {
-  public ScrollViewer MainScrollViewer => HeaderScrollViewer;
-  
+  public ScrollViewer MainScrollViewer => ScrollViewer ;
+
   public static readonly DependencyProperty IsHideHorizontalScrollBarProperty = DependencyProperty.Register( nameof( IsHideHorizontalScrollBar ), typeof( bool ), typeof( DataGridWrapper ), new PropertyMetadata( false, IsHideHorizontalScrollBarChangedCallback ) ) ;
 
   private static void IsHideHorizontalScrollBarChangedCallback( DependencyObject d, DependencyPropertyChangedEventArgs e )
   {
     if ( d is not DataGridWrapper dataGridWrapper ) return ;
-    dataGridWrapper.DataGridScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden ;
+    dataGridWrapper.MainScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden ;
   }
 
   public bool IsHideHorizontalScrollBar
@@ -24,9 +24,9 @@ public partial class DataGridWrapper
     get => (bool)GetValue( IsHideHorizontalScrollBarProperty ) ;
     set => SetValue( IsHideHorizontalScrollBarProperty, value ) ;
   }
-  
+
   public static readonly DependencyProperty HeaderBorderColorProperty = DependencyProperty.Register( nameof( HeaderBorderColor ), typeof( Brush ), typeof( DataGridWrapper ), new PropertyMetadata( Brushes.Black, PropertyChangedCallback ) ) ;
-  
+
   public Brush HeaderBorderColor
   {
     get => (Brush)GetValue( HeaderBorderColorProperty ) ;
@@ -80,7 +80,6 @@ public partial class DataGridWrapper
     set => SetValue( HeaderMarginProperty, value ) ;
   }
 
-
   private static void PropertyChangedCallback( DependencyObject d, DependencyPropertyChangedEventArgs e )
   {
     if ( d is not DataGridWrapper dataGridWrapper ) return ;
@@ -109,7 +108,10 @@ public partial class DataGridWrapper
 
   private void InitializeHeader()
   {
-    if ( DataContext is not IDataGridContext context || DataGrid is null) return ;
+    if ( DataContext is not IDataGridContext context || DataGrid is null ) return ;
+    DataGrid.PreviewMouseWheel += DataGridOnPreviewMouseWheel ;
+    SizeChanged += ( _, _ ) => Resize() ;
+    MainScrollViewer.LayoutUpdated += ( _, _ ) => Resize() ;
     Header.Children.Clear() ;
     Header.ColumnDefinitions.Clear() ;
     Header.RowDefinitions.Clear() ;
@@ -118,6 +120,19 @@ public partial class DataGridWrapper
     DataGrid.BorderThickness = new Thickness( 1, 0, 1, 1 ) ;
     var groupInfos = SetGroupInfo( groups ) ;
     SetHeaderGroupContent( groupInfos ) ;
+  }
+
+  private void DataGridOnPreviewMouseWheel( object sender, MouseWheelEventArgs e )
+  {
+    MainScrollViewer.ScrollToVerticalOffset( MainScrollViewer.VerticalOffset - e.Delta ) ;
+    e.Handled = true ;
+  }
+
+  private void Resize()
+  {
+    var size = ActualWidth - DataGrid.Columns.Take( DataGrid.Columns.Count - 1 ).Sum( x => x.ActualWidth ) - 2 - ( MainScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 20 : 0 ) ;
+    var lastColumn = DataGrid.Columns.Last() ;
+    lastColumn.Width = size > 0 ? new DataGridLength( size ) : new DataGridLength( lastColumn.MinWidth ) ;
   }
 
   private string[][] SeparateGroupHeaderGrid( IDataGridContext context )
@@ -156,7 +171,7 @@ public partial class DataGridWrapper
 
         group.ColumnSpan++ ;
         rowIndex = group.RowIndex + group.RowSpan ;
-        prefix += key ;
+        prefix = key ;
         continue ;
 
         GroupInfo CreateNewGroup()
