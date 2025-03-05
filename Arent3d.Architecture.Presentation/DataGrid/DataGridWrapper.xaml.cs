@@ -130,7 +130,7 @@ public partial class DataGridWrapper
 
   private void Resize()
   {
-    var size = ActualWidth - DataGrid.Columns.Take( DataGrid.Columns.Count - 1 ).Sum( x => x.ActualWidth ) - 2 - ( MainScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 20 : 0 ) ;
+    var size = ActualWidth - DataGrid.Columns.Take( DataGrid.Columns.Count - 1 ).Sum( x => x.ActualWidth ) - 2 - ( MainScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? 17 : 0 ) ;
     var lastColumn = DataGrid.Columns.Last() ;
     lastColumn.Width = size > 0 ? new DataGridLength( size ) : new DataGridLength( lastColumn.MinWidth ) ;
   }
@@ -143,7 +143,8 @@ public partial class DataGridWrapper
 
     foreach ( var column in DataGrid.Columns ) {
       var columnDefinition = new ColumnDefinition() ;
-      var binding = new Binding( nameof( column.ActualWidth ) ) { Source = column, Converter = new DoubleToDataGridLengthConverter() } ;
+      var isLastColumn = DataGrid.Columns.IndexOf( column ) == DataGrid.Columns.Count - 1 ;
+      var binding = new Binding( nameof( column.ActualWidth ) ) { Source = column, Converter = new DoubleToDataGridLengthConverter() { Offset = isLastColumn ? 2 : 0 } } ;
       BindingOperations.SetBinding( columnDefinition, ColumnDefinition.WidthProperty, binding ) ;
       Header.ColumnDefinitions.Add( columnDefinition ) ;
     }
