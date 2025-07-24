@@ -12,16 +12,16 @@
             <RowDefinition Height="Auto"></RowDefinition>
             <RowDefinition Height="*"></RowDefinition>
         </Grid.RowDefinitions>
+        
+        <!-- Custom Header -->
         <ScrollViewer x:Name="HeaderScrollViewer" VerticalScrollBarVisibility="Hidden"
                       HorizontalScrollBarVisibility="Hidden">
             <Grid x:Name="Header" Margin="1,0,0,0"></Grid>
         </ScrollViewer>
         
-        <ScrollViewer Grid.Row="1" x:Name="DataGridScrollViewer" HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
-            <b:Interaction.Behaviors>
-                <behaviors:SyncHorizontalScrollBehavior TargetScrollViewer="{Binding ElementName=HeaderScrollViewer}"></behaviors:SyncHorizontalScrollBehavior>
-            </b:Interaction.Behaviors>
+        <!-- DataGrid with built-in ScrollViewer -->
+        <Grid Grid.Row="1" x:Name="DataGridContainer">
             <ContentControl x:Name="ContentControl" />
-        </ScrollViewer>
+        </Grid>
     </Grid>
 </UserControl>

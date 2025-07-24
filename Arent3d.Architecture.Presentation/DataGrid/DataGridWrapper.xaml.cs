@@ -2,6 +2,9 @@ using System.Windows ;
 using System.Windows.Controls ;
 using System.Windows.Input ;
 using System.Windows.Media ;
+using System.Windows.Automation.Peers ;
+using System.Windows.Automation.Provider ;
+using System.Windows.Threading ;
 
 namespace Arent3d.Architecture.Presentation.DataGrid ;
 
@@ -11,7 +14,8 @@ public partial class DataGridWrapper
   private const double DefaultHeaderTextMargin = 3.0 ;
   private const double DefaultHeaderTextMarginVertical = 5.0 ;
 
-  public ScrollViewer MainScrollViewer => DataGridScrollViewer ;
+  // Get the DataGrid's built-in ScrollViewer
+  public ScrollViewer? MainScrollViewer => _scrollViewerHandler?.DataGridScrollViewer ;
 
   #region Dependency Properties
 
@@ -95,6 +99,7 @@ public partial class DataGridWrapper
   private readonly IDataGridResizer _dataGridResizer ;
   private int _numberOfRows ;
   private int _numberOfColumns ;
+  private DataGridScrollViewerHandler? _scrollViewerHandler ;
 
   #endregion
 
@@ -107,7 +112,9 @@ public partial class DataGridWrapper
     {
       ContentControl.Content = value ;
       value.HeadersVisibility = DataGridHeadersVisibility.None ;
+      
       InitializeHeader() ;
+      SetupScrollSynchronization() ;
     }
   }
 
@@ -123,6 +130,7 @@ public partial class DataGridWrapper
     _dataGridResizer = new DataGridResizer() ;
 
     DataContextChanged += OnDataContextChanged ;
+    Unloaded += OnUnloaded ;
   }
 
   #endregion
@@ -132,7 +140,10 @@ public partial class DataGridWrapper
   private static void OnIsHideHorizontalScrollBarChanged( DependencyObject d, DependencyPropertyChangedEventArgs e )
   {
     if ( d is DataGridWrapper dataGridWrapper ) {
-      dataGridWrapper.DataGridScrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden ;
+      var scrollViewer = dataGridWrapper._scrollViewerHandler?.DataGridScrollViewer ;
+      if ( scrollViewer != null ) {
+        scrollViewer.HorizontalScrollBarVisibility = ScrollBarVisibility.Hidden ;
+      }
     }
   }
 
@@ -157,8 +168,11 @@ public partial class DataGridWrapper
 
   private void OnDataGridPreviewMouseWheel( object sender, MouseWheelEventArgs e )
   {
-    MainScrollViewer.ScrollToVerticalOffset( MainScrollViewer.VerticalOffset - e.Delta ) ;
-    e.Handled = true ;
+    var scrollViewer = _scrollViewerHandler?.DataGridScrollViewer ;
+    if ( scrollViewer != null ) {
+      scrollViewer.ScrollToVerticalOffset( scrollViewer.VerticalOffset - e.Delta ) ;
+      e.Handled = true ;
+    }
   }
 
   private void OnSizeChanged( object sender, SizeChangedEventArgs e )
@@ -169,6 +183,27 @@ public partial class DataGridWrapper
   private void OnLayoutUpdated( object sender, EventArgs e )
   {
     Resize() ;
+  }
+
+  private void OnUnloaded( object sender, RoutedEventArgs e )
+  {
+    Cleanup() ;
+  }
+
+  private void Cleanup()
+  {
+    // Dispose the scroll viewer handler
+    _scrollViewerHandler?.Dispose() ;
+    _scrollViewerHandler = null ;
+    
+    // Remove event handlers
+    if ( DataGrid != null )
+    {
+      DataGrid.PreviewMouseWheel -= OnDataGridPreviewMouseWheel ;
+    }
+    
+    SizeChanged -= OnSizeChanged ;
+    Unloaded -= OnUnloaded ;
   }
 
   #endregion
@@ -201,7 +236,17 @@ public partial class DataGridWrapper
   {
     DataGrid.PreviewMouseWheel += OnDataGridPreviewMouseWheel ;
     SizeChanged += OnSizeChanged ;
-    MainScrollViewer.LayoutUpdated += OnLayoutUpdated ;
+  }
+
+  private void SetupScrollSynchronization()
+  {
+    // Dispose existing handler if any
+    _scrollViewerHandler?.Dispose() ;
+    
+    // Create new handler
+    _scrollViewerHandler = new DataGridScrollViewerHandler( DataGrid, HeaderScrollViewer ) ;
+    _scrollViewerHandler.SetupLayoutUpdatedHandler( OnLayoutUpdated ) ;
+    _scrollViewerHandler.SetupScrollSynchronization() ;
   }
 
   private void ClearHeader()
@@ -213,12 +258,15 @@ public partial class DataGridWrapper
 
   private void SetupDataGridBorder()
   {
-    DataGrid.BorderThickness = new Thickness( 1, 0, 1, 1 ) ;
+    ContentControl.BorderThickness = new Thickness( 1, 0, 1, 1 ) ;
   }
 
   private void Resize()
   {
-    _dataGridResizer.ResizeLastColumn( DataGrid, MainScrollViewer, ActualWidth ) ;
+    var scrollViewer = _scrollViewerHandler?.DataGridScrollViewer ;
+    if ( scrollViewer != null ) {
+      _dataGridResizer.ResizeLastColumn( DataGrid, scrollViewer, ActualWidth ) ;
+    }
   }
 
   internal int NumberOfRows => _numberOfRows ;

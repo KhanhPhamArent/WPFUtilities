@@ -7,7 +7,7 @@ namespace Arent3d.Architecture.Presentation.DataGrid ;
 
 public class HeaderGridBuilder : IHeaderGridBuilder
 {
-  private const double BorderOffset = 2.0 ;
+  private const double BorderOffset = 0 ;
 
   public string[][] BuildHeaderGrid( IDataGridContext context, System.Windows.Controls.DataGrid dataGrid, Grid header,
     out int numberOfRows, out int numberOfColumns )
