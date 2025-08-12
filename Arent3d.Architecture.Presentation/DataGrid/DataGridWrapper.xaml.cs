@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -109,7 +110,7 @@ public partial class DataGridWrapper
             ContentControl.Content = value;
             value.HeadersVisibility = DataGridHeadersVisibility.None;
             value.HorizontalAlignment = HorizontalAlignment.Left;
-
+            
             InitializeHeader();
             SetupScrollSynchronization();
         }
@@ -165,6 +166,16 @@ public partial class DataGridWrapper
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         InitializeHeader();
+        if (DataContext is INotifyPropertyChanged viewModel)
+        {
+            viewModel.PropertyChanged += (_, args) =>
+            {
+                if (args.PropertyName == nameof(IDataGridContext.ColumnHeaders))
+                {
+                    InitializeHeader();
+                }
+            };
+        }
     }
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
