@@ -2,6 +2,7 @@ using System.Windows ;
 using System.Windows.Controls ;
 using System.Windows.Media ;
 using System.Windows.Threading ;
+using Arent3d.Architecture.Presentation.Behaviors ;
 
 namespace Arent3d.Architecture.Presentation.DataGrid ;
 
@@ -13,6 +14,7 @@ public class DataGridScrollViewerHandler
   private ScrollViewer? _cachedDataGridScrollViewer ;
   private bool _scrollSynchronizationSetup ;
   private bool _isDisposed ;
+  private SyncHorizontalScrollBehavior? _syncBehavior ;
 
   public DataGridScrollViewerHandler( System.Windows.Controls.DataGrid dataGrid, ScrollViewer headerScrollViewer )
   {
@@ -50,6 +52,11 @@ public class DataGridScrollViewerHandler
 
     _scrollSynchronizationSetup = false ;
     _cachedDataGridScrollViewer = null ;
+    
+    // Clean up existing sync behavior
+    _syncBehavior?.Detach() ;
+    _syncBehavior = null ;
+    
     SetupScrollSynchronizationInternal() ;
   }
 
@@ -62,6 +69,10 @@ public class DataGridScrollViewerHandler
     // Stop the detection timer
     _scrollViewerDetectionTimer?.Stop() ;
     _scrollViewerDetectionTimer = null ;
+    
+    // Clean up sync behavior
+    _syncBehavior?.Detach() ;
+    _syncBehavior = null ;
     
     // Remove event handlers
     _dataGrid.Loaded -= OnDataGridLoaded ;
@@ -142,14 +153,18 @@ public class DataGridScrollViewerHandler
 
   private void SyncScrollViewers( ScrollViewer source, ScrollViewer target )
   {
-    bool _lockScroll = false ;
-    source.ScrollChanged += ( _, args ) =>
+    // Clean up existing behavior if any
+    _syncBehavior?.Detach() ;
+    
+    // Create and configure the sync behavior
+    _syncBehavior = new SyncHorizontalScrollBehavior
     {
-      if ( _lockScroll || _isDisposed ) return ;
-      _lockScroll = true ;
-      target.ScrollToHorizontalOffset( args.HorizontalOffset ) ;
-      _lockScroll = false ;
+      TargetScrollViewer = target,
+      DataGrid = _dataGrid
     } ;
+    
+    // Attach the behavior to the source ScrollViewer
+    _syncBehavior.Attach( source ) ;
   }
 
   private ScrollViewer? GetDataGridScrollViewer()
