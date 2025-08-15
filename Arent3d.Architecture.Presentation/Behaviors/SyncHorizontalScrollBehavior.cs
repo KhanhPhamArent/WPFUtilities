@@ -29,18 +29,11 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
     {
         base.OnAttached();
         if (TargetScrollViewer is null) return;
-        if (DataGrid != null)
-        {
-            DataGrid.BeginningEdit += (_, _) => _isDataGridEditing = true;
-            DataGrid.CellEditEnding += (_, _) => _isDataGridEditing = false;
-        }
-
         SyncScrollViewer(AssociatedObject, TargetScrollViewer);
         SyncScrollViewer(TargetScrollViewer, AssociatedObject);
     }
 
     private bool _lockScroll;
-    private bool _isDataGridEditing;
 
     private void SyncScrollViewer(ScrollViewer source, ScrollViewer dest)
     {
@@ -48,7 +41,7 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
         {
             if (_lockScroll) return;
 
-            if (_isDataGridEditing && args.HorizontalOffset == 0)
+            if (args.HorizontalOffset == 0)
             {
                 return;
             }
