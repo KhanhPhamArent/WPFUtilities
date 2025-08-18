@@ -1,18 +1,25 @@
 using System.Windows ;
 using System.Windows.Controls ;
-using System.Windows.Media ;
 
 namespace Arent3d.Architecture.Presentation.DataGrid ;
 
 public class HeaderContentBuilder : IHeaderContentBuilder
 {
-  public void CreateHeaderContent( Dictionary<string, GroupInfo> groupInfos, Grid header, DataGridWrapper wrapper )
+  public void CreateHeaderContent( Dictionary<string, GroupInfo> groupInfos, Grid header, Grid frozenHeader, DataGridWrapper wrapper, int frozenColumnCount )
   {
     foreach ( var group in groupInfos.Values ) {
       var textBlock = CreateHeaderText( group, wrapper ) ;
       var border = CreateHeaderBorder( group, wrapper ) ;
       border.Child = textBlock ;
-      header.Children.Add( border ) ;
+      
+      // Add to the appropriate grid based on whether it's frozen
+      if ( group.IsFrozen ) {
+        frozenHeader.Children.Add( border ) ;
+      } else {
+        header.Children.Add( border ) ;
+      }
+      
+      SetGridPosition( border, group, frozenColumnCount ) ;
     }
   }
 
@@ -35,9 +42,8 @@ public class HeaderContentBuilder : IHeaderContentBuilder
     var borderThickness = wrapper.HeaderThickness / 2 ;
     var thickness = CalculateBorderThickness( groupInfo, borderThickness, wrapper.NumberOfRows, wrapper.NumberOfColumns ) ;
 
-    var border = new Border { BorderBrush = wrapper.HeaderBorderColor, BorderThickness = thickness, Background = wrapper.HeaderBackground } ;
+    var border = new Border { BorderBrush = wrapper.HeaderBorderColor, BorderThickness = thickness, Background = wrapper.HeaderBackground} ;
 
-    SetGridPosition( border, groupInfo ) ;
     return border ;
   }
 
@@ -47,17 +53,22 @@ public class HeaderContentBuilder : IHeaderContentBuilder
 
     if ( groupInfo.ColumnIndex == 0 ) left = borderThickness * 2 ;
     if ( groupInfo.ColumnIndex + ( groupInfo.ColumnSpan == 0 ? 1 : groupInfo.ColumnSpan ) == numberOfColumns ) right = borderThickness * 2 ;
+    if (groupInfo.ColumnIndex == numberOfColumns - 1) right = borderThickness * 2 ;
     if ( groupInfo.RowIndex == 0 ) top = borderThickness * 2 ;
     if ( groupInfo.RowIndex + ( groupInfo.RowSpan == 0 ? 1 : groupInfo.RowSpan ) == numberOfRows ) bottom = borderThickness * 2 ;
+    if ( groupInfo.RowIndex == numberOfRows - 1 ) bottom = borderThickness * 2 ;
 
     return new Thickness( left, top, right, bottom ) ;
   }
 
-  private void SetGridPosition( Border border, GroupInfo groupInfo )
+  private void SetGridPosition( Border border, GroupInfo groupInfo, int frozenColumnCount )
   {
     Grid.SetRow( border, groupInfo.RowIndex ) ;
     if ( groupInfo.RowSpan > 0 ) Grid.SetRowSpan( border, groupInfo.RowSpan ) ;
-    Grid.SetColumn( border, groupInfo.ColumnIndex ) ;
+    
+    // Adjust column index for scrollable columns (subtract frozen column count)
+    var adjustedColumnIndex = groupInfo.IsFrozen ? groupInfo.ColumnIndex : groupInfo.ColumnIndex - frozenColumnCount ;
+    Grid.SetColumn( border, adjustedColumnIndex ) ;
     if ( groupInfo.ColumnSpan > 0 ) Grid.SetColumnSpan( border, groupInfo.ColumnSpan ) ;
   }
 } 

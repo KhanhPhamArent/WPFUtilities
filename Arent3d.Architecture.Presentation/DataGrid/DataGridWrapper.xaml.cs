@@ -87,6 +87,16 @@ public partial class DataGridWrapper
         set => SetValue(HeaderMarginProperty, value);
     }
 
+    public static readonly DependencyProperty FrozenColumnCountProperty =
+        DependencyProperty.Register(nameof(FrozenColumnCount), typeof(int), typeof(DataGridWrapper),
+            new PropertyMetadata(0, OnFrozenColumnCountChanged));
+
+    public int FrozenColumnCount
+    {
+        get => (int)GetValue(FrozenColumnCountProperty);
+        set => SetValue(FrozenColumnCountProperty, value);
+    }
+
     #endregion
 
     #region Private Fields
@@ -163,6 +173,14 @@ public partial class DataGridWrapper
         }
     }
 
+    private static void OnFrozenColumnCountChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    {
+        if (d is DataGridWrapper dataGridWrapper)
+        {
+            dataGridWrapper.InitializeHeader();
+        }
+    }
+
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         InitializeHeader();
@@ -213,17 +231,18 @@ public partial class DataGridWrapper
             return;
 
         SetupEventHandlers();
-        ClearHeader();
+        ClearHeaders();
 
         var groups =
-            _headerGridBuilder.BuildHeaderGrid(context, DataGrid, Header, out _numberOfRows, out _numberOfColumns);
+            _headerGridBuilder.BuildHeaderGrid(context, DataGrid, Header, FrozenHeader, FrozenColumnCount, out _numberOfRows, out _numberOfColumns);
 
         if (_numberOfRows == 0)
             return;
 
         SetupDataGridBorder();
-        var groupInfos = _headerGridBuilder.CreateGroupInfos(groups, _numberOfRows, _numberOfColumns);
-        _headerContentBuilder.CreateHeaderContent(groupInfos, Header, this);
+        var groupInfos = _headerGridBuilder.CreateGroupInfos(groups, _numberOfRows, _numberOfColumns, FrozenColumnCount);
+        _headerContentBuilder.CreateHeaderContent(groupInfos, Header, FrozenHeader, this, FrozenColumnCount);
+        if (FrozenColumnCount > 0 )FrozenHeader.Margin = new Thickness(0,0,1,0);
     }
 
     #endregion
@@ -246,11 +265,14 @@ public partial class DataGridWrapper
         _scrollViewerHandler.SetupScrollSynchronization();
     }
 
-    private void ClearHeader()
+    private void ClearHeaders()
     {
         Header.Children.Clear();
         Header.ColumnDefinitions.Clear();
         Header.RowDefinitions.Clear();
+        FrozenHeader.Children.Clear();
+        FrozenHeader.ColumnDefinitions.Clear();
+        FrozenHeader.RowDefinitions.Clear();
     }
 
     private void SetupDataGridBorder()
@@ -265,19 +287,42 @@ public partial class DataGridWrapper
         {
             AdjustHeaderScrollViewerWidth(scrollViewer);
             _dataGridResizer.ResizeLastColumn(DataGrid, scrollViewer, ActualWidth - 3);
+            UpdateFrozenColumnWidth();
         }
+    }
+
+    private void UpdateFrozenColumnWidth()
+    {
+        if (DataGrid == null || FrozenColumnCount <= 0)
+            return;
+
+        double frozenWidth = 0;
+        for (int i = 0; i < FrozenColumnCount && i < DataGrid.Columns.Count; i++)
+        {
+            frozenWidth += DataGrid.Columns[i].ActualWidth;
+        }
+
+        FrozenColumnDefinition.Width = new GridLength(frozenWidth);
     }
 
     private void AdjustHeaderScrollViewerWidth(ScrollViewer dataGridScrollViewer)
     {
+        double availableWidth = ActualWidth;
+        
+        // Subtract frozen column width
+        if (FrozenColumnCount > 0)
+        {
+            availableWidth -= FrozenColumnDefinition.Width.Value;
+        }
+        
         if (dataGridScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible)
         {
             var scrollBarWidth = SystemParameters.VerticalScrollBarWidth;
-            HeaderScrollViewer.Width = ActualWidth - scrollBarWidth - 3;
+            HeaderScrollViewer.Width = availableWidth - scrollBarWidth - 3;
         }
         else
         {
-            HeaderScrollViewer.Width = ActualWidth;
+            HeaderScrollViewer.Width = availableWidth;
         }
     }
 

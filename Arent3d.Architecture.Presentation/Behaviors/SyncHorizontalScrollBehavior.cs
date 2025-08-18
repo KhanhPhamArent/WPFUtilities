@@ -1,5 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
 using Microsoft.Xaml.Behaviors;
 
 namespace Arent3d.Architecture.Presentation.Behaviors;
@@ -37,18 +39,34 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
 
     private void SyncScrollViewer(ScrollViewer source, ScrollViewer dest)
     {
+        var scrollBar = FindClosestHorizontalScrollBar(source);
         source.ScrollChanged += (_, args) =>
         {
             if (_lockScroll) return;
 
-            if (args.HorizontalOffset == 0)
+            if (scrollBar?.IsMouseCaptureWithin == false && args.HorizontalOffset == 0)
             {
                 return;
             }
 
             _lockScroll = true;
-            dest.ScrollToHorizontalOffset(args.HorizontalOffset);
+            var offset = args.HorizontalOffset < 10 ? 0 : args.HorizontalOffset;
+            Console.WriteLine(offset);
+            dest.ScrollToHorizontalOffset(offset);
             _lockScroll = false;
         };
+    }
+
+    private static ScrollBar? FindClosestHorizontalScrollBar(DependencyObject prop)
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(prop); i++)
+        {
+            var child = VisualTreeHelper.GetChild(prop, i);
+            if (child is ScrollBar castedProp && castedProp.Orientation == Orientation.Horizontal) return castedProp;
+            var closestChild = FindClosestHorizontalScrollBar(child);
+            if (closestChild != null) return closestChild;
+        }
+
+        return null;
     }
 }

@@ -12,4 +12,5 @@ public class GroupInfo
   public int RowIndex { get ; set ; }
   public int ColumnSpan { get ; set ; }
   public int RowSpan { get ; set ; }
+  public bool IsFrozen { get ; set ; }
 } 
