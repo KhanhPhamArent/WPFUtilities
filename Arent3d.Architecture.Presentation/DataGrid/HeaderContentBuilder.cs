@@ -7,19 +7,42 @@ public class HeaderContentBuilder : IHeaderContentBuilder
 {
   public void CreateHeaderContent( Dictionary<string, GroupInfo> groupInfos, Grid header, Grid frozenHeader, DataGridWrapper wrapper, int frozenColumnCount )
   {
-    foreach ( var group in groupInfos.Values ) {
-      var textBlock = CreateHeaderText( group, wrapper ) ;
-      var border = CreateHeaderBorder( group, wrapper ) ;
-      border.Child = textBlock ;
+    int count = 0;
+    foreach (var group in groupInfos.Values)
+    {
+      count++;
       
-      // Add to the appropriate grid based on whether it's frozen
-      if ( group.IsFrozen ) {
-        frozenHeader.Children.Add( border ) ;
-      } else {
-        header.Children.Add( border ) ;
+      var columnTemPlate = wrapper.TryFindResource($"Column{count}Template") as DataTemplate;
+
+      var border = CreateHeaderBorder(group, wrapper);
+
+      if (columnTemPlate != null)
+      {
+        var control = new ContentControl
+        {
+          Content = wrapper.DataContext,
+          ContentTemplate = columnTemPlate
+        };
+
+        border.Child = control;
       }
-      
-      SetGridPosition( border, group, frozenColumnCount ) ;
+      else
+      {
+        var textBlock = CreateHeaderText(group, wrapper);
+        border.Child = textBlock;
+      }
+
+      // Add to the appropriate grid based on whether it's frozen
+      if (group.IsFrozen)
+      {
+        frozenHeader.Children.Add(border);
+      }
+      else
+      {
+        header.Children.Add(border);
+      }
+
+      SetGridPosition(border, group, frozenColumnCount);
     }
   }
 
