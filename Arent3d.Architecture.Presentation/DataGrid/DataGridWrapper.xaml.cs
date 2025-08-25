@@ -7,7 +7,7 @@ namespace Arent3d.Architecture.Presentation.DataGrid;
 
 public partial class DataGridWrapper
 {
-    private const double DefaultHeaderThickness = 1.0;
+    private const double DefaultHeaderThickness = 2.0;
     private const double DefaultHeaderTextMargin = 3.0;
     private const double DefaultHeaderTextMarginVertical = 5.0;
 
@@ -288,6 +288,7 @@ public partial class DataGridWrapper
             AdjustHeaderScrollViewerWidth(scrollViewer);
             _dataGridResizer.ResizeLastColumn(DataGrid, scrollViewer, ActualWidth - 3);
             UpdateFrozenColumnWidth();
+            _scrollViewerHandler?.ExecuteSync();
         }
     }
 

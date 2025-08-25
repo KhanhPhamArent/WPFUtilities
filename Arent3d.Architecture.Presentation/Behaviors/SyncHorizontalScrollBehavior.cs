@@ -21,12 +21,6 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
         set => SetValue(TargetScrollViewerProperty, value);
     }
 
-    public System.Windows.Controls.DataGrid? DataGrid
-    {
-        get => (System.Windows.Controls.DataGrid?)GetValue(DataGridProperty);
-        set => SetValue(DataGridProperty, value);
-    }
-
     protected override void OnAttached()
     {
         base.OnAttached();
@@ -39,22 +33,30 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
 
     private void SyncScrollViewer(ScrollViewer source, ScrollViewer dest)
     {
-        var scrollBar = FindClosestHorizontalScrollBar(source);
-        source.ScrollChanged += (_, args) =>
+        source.ScrollChanged += (_, _) => { SyncScrollViewerImpl(source, dest); };
+    }
+
+    public void SyncScrollViewer()
+    {
+        SyncScrollViewerImpl(AssociatedObject, TargetScrollViewer);
+    }
+
+    private void SyncScrollViewerImpl(ScrollViewer source, ScrollViewer? dest)
+    {
+        if (dest is null || _lockScroll) return;
+
+        var sourceScrollbar = FindClosestHorizontalScrollBar(source);
+        if (sourceScrollbar?.IsMouseCaptureWithin == false && source.HorizontalOffset == 0) return;
+
+        _lockScroll = true;
+        if (Math.Abs(source.HorizontalOffset - source.ScrollableWidth) < 0.1)
         {
-            if (_lockScroll) return;
+            var offset = source.ScrollableWidth - dest.ScrollableWidth;
+            source.ScrollToHorizontalOffset(source.HorizontalOffset - offset);
+        }
 
-            if (scrollBar?.IsMouseCaptureWithin == false && args.HorizontalOffset == 0)
-            {
-                return;
-            }
-
-            _lockScroll = true;
-            var offset = args.HorizontalOffset < 10 ? 0 : args.HorizontalOffset;
-            Console.WriteLine(offset);
-            dest.ScrollToHorizontalOffset(offset);
-            _lockScroll = false;
-        };
+        dest.ScrollToHorizontalOffset(source.HorizontalOffset);
+        _lockScroll = false;
     }
 
     private static ScrollBar? FindClosestHorizontalScrollBar(DependencyObject prop)

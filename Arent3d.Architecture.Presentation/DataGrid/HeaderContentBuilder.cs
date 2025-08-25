@@ -12,7 +12,7 @@ public class HeaderContentBuilder : IHeaderContentBuilder
     {
       count++;
       
-      var columnTemPlate = wrapper.TryFindResource($"Column{count}Template") as DataTemplate;
+      var columnTemPlate = wrapper.TryFindResource($"ColumnHeaderCell{count}Template") as DataTemplate;
 
       var border = CreateHeaderBorder(group, wrapper);
 
@@ -65,7 +65,7 @@ public class HeaderContentBuilder : IHeaderContentBuilder
     var borderThickness = wrapper.HeaderThickness / 2 ;
     var thickness = CalculateBorderThickness( groupInfo, borderThickness, wrapper.NumberOfRows, wrapper.NumberOfColumns ) ;
 
-    var border = new Border { BorderBrush = wrapper.HeaderBorderColor, BorderThickness = thickness, Background = wrapper.HeaderBackground} ;
+    var border = new Border { BorderBrush = wrapper.HeaderBorderColor, BorderThickness = thickness, Background = wrapper.HeaderBackground } ;
 
     return border ;
   }

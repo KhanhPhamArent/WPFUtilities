@@ -11,22 +11,23 @@
             <RowDefinition Height="*"></RowDefinition>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="0"></ColumnDefinition>
             <ColumnDefinition x:Name="FrozenColumnDefinition" Width="Auto"></ColumnDefinition>
             <ColumnDefinition Width="*"></ColumnDefinition>
         </Grid.ColumnDefinitions>
         
         <!-- Frozen Header -->
-        <Grid x:Name="FrozenHeader" Grid.Column="0" Margin="1,0,0,0"></Grid>
+        <Grid x:Name="FrozenHeader" Grid.Column="1"></Grid>
         
         <!-- Scrollable Header -->
-        <ScrollViewer x:Name="HeaderScrollViewer" Grid.Column="1" VerticalScrollBarVisibility="Hidden"
+        <ScrollViewer x:Name="HeaderScrollViewer" Grid.Column="2" VerticalScrollBarVisibility="Hidden"
                       HorizontalScrollBarVisibility="Hidden"
                       HorizontalAlignment="Left">
-            <Grid x:Name="Header" Margin="1,0,0,0"></Grid>
+            <Grid x:Name="Header"></Grid>
         </ScrollViewer>
         
         <!-- DataGrid with built-in ScrollViewer -->
-        <Grid Grid.Row="1" Grid.ColumnSpan="2" x:Name="DataGridContainer">
+        <Grid Grid.Row="1" Grid.ColumnSpan="3" x:Name="DataGridContainer">
             <ContentControl x:Name="ContentControl" />
         </Grid>
     </Grid>
