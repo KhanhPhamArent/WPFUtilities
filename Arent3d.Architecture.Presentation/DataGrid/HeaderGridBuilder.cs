@@ -30,27 +30,37 @@ public class HeaderGridBuilder : IHeaderGridBuilder
 
         for (var columnIndex = 0; columnIndex < groupList.Length; columnIndex++)
         {
-            var groups = groupList[columnIndex];
+            var strGroups = groupList[columnIndex];
+            var groups = new List<GroupInfo>();
             var isFirstCreation = true;
             var rowIndex = 0;
             var prefix = string.Empty;
 
-            for (var index = 0; index < groups.Length; index++)
+            for (var index = 0; index < strGroups.Length; index++)
             {
-                var groupName = groups[index];
+                var groupName = strGroups[index];
                 var key = prefix + "." + groupName;
 
                 if (!groupMap.TryGetValue(key, out var group))
                 {
-                    group = CreateNewGroup(groupName, columnIndex, rowIndex, numberOfRows, groups.Length,
+                    group = CreateNewGroup(groupName, columnIndex, rowIndex, numberOfRows, strGroups.Length,
                         isFirstCreation, frozenColumnCount);
                     groupMap[key] = group;
                 }
 
+                groups.Add(group);
                 group.ColumnSpan++;
                 rowIndex = group.RowIndex + group.RowSpan;
                 prefix = key;
                 isFirstCreation = false;
+            }
+            
+            if(!groups.Any()) continue;
+            
+            var remainingRows = numberOfRows - groups.Sum( x => x.RowSpan);
+            if (remainingRows > 0 )
+            {
+                groups.Last().RowSpan += remainingRows;
             }
         }
 
