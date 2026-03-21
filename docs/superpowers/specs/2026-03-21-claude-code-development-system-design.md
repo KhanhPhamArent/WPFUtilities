@@ -2,7 +2,7 @@
 
 **Date:** 2026-03-21
 **Scope:** Global setup across all C#/WPF/Revit Add-in projects
-**Target workflow:** Investigate -> Plan -> Implement -> Build -> Test in Revit -> Commit -> PR
+**Target workflow:** Investigate -> Plan -> Implement -> Build -> Review -> (loop back if issues) -> Test in Revit -> Commit -> PR
 
 ---
 
@@ -202,6 +202,7 @@ disable-model-invocation: true
 **Location:** `~/.claude/skills/solid-review/SKILL.md`
 
 - **Phase:** Pre-commit review
+- **Runs in:** Forked sonnet subagent (`context: fork`) — saves opus tokens
 - **Purpose:** Reviews changed files against Clean Code and SOLID principles
 - **Dynamic context:**
   - `!`git diff --cached --name-only`` — staged files
@@ -215,20 +216,9 @@ disable-model-invocation: true
   6. Report findings with severity (Error/Warning/Info) and file:line references
 - **Relationship to agents:** The `/solid-review` skill provides the workflow and instructions. Claude dispatches `solid-checker` to perform the actual SOLID analysis. `code-improvement-advisor` covers broader readability/performance suggestions — complementary, not overlapping.
 
-### 3.4 `/build` — Build & Validate
+### 3.4 `/build` — Removed
 
-**Location:** `~/.claude/skills/build/SKILL.md`
-
-- **Phase:** Build
-- **Purpose:** Runs build, parses output, suggests fixes
-- **Dynamic context:** `!`grep -rh "<TargetFramework" --include="*.csproj" . 2>/dev/null``
-- **Instructions to Claude:**
-  1. Find `.csproj`/`.sln` in working directory
-  2. Run `dotnet build` via Bash
-  3. On failure: parse MSBuild errors, suggest fixes for common issues (missing NuGet refs, framework compat, Revit API version mismatches)
-  4. On success: report warnings count, suggest suppressions if appropriate
-
-**Note:** The `/build` skill is the intelligent build tool (diagnoses and suggests fixes). The PreToolUse build hook (2.1) is a thin pass/fail gate. They serve different purposes — the hook prevents bad commits, the skill helps you fix build problems.
+~~Originally planned as a separate skill.~~ **Removed** — Claude already runs `dotnet build` and parses errors naturally. Adding a skill for this just loads extra tokens for something Claude does inline. The PreToolUse hook (2.1) handles the commit gate. If a build fails during implementation, Claude diagnoses it directly.
 
 ---
 
@@ -251,11 +241,34 @@ System prompt for the agent in markdown.
 
 **Fields:** `name` (required), `description` (required, with examples), `model` (`sonnet`/`opus`/`haiku`), `color` (`blue`/`cyan`/`green`/`yellow`/`magenta`/`red`), `tools` (optional array), `memory` (optional)
 
-### 4.1 `revit-api-expert`
+### 4.1 `codebase-investigator`
 
-- **Model:** sonnet
+- **Model:** haiku (read-only exploration — pattern-matching, no code writing)
+- **Color:** magenta
+- **Triggered when:** Starting a new task, investigating a bug, or exploring how something works in the codebase
+- **Primary caller:** `/investigate` skill dispatches this agent in Step 2 alongside a git/web research agent (parallel)
+- **Responsibilities:**
+  - Searches the codebase for existing solutions, similar patterns, or related implementations
+  - Maps dependencies — what classes/interfaces are involved, how they connect
+  - Identifies reusable code that could solve or partially solve the task
+  - Finds where similar problems were solved before (naming patterns, architectural patterns)
+  - Reports findings: relevant files with paths, existing patterns to follow, potential reuse opportunities
+- **Tools:** Read, Grep, Glob (read-only — never writes)
+- **Output contract:** Returns a structured report that `/investigate` merges with git/web research in Step 3:
+  - **Relevant files:** paths + brief description of each
+  - **Existing patterns:** how similar problems are currently solved
+  - **Reuse opportunities:** specific classes/methods that can be extended or composed
+  - **Dependency map:** key types involved and their relationships
+
+### 4.2 `revit-api-expert`
+
+- **Model:** sonnet (dual role — needs reasoning for both implementation and review)
 - **Color:** yellow
 - **Triggered when:** Code touches Revit API types (Document, Element, Transaction, FilteredElementCollector, etc.)
+- **Dual role:**
+  - **As implementer** (in Revit pipeline): writes Revit API code — commands, events, updaters, element operations
+  - **As reviewer** (in review step): checks existing Revit API code for pitfalls
+  - Stays on sonnet for both roles because Revit API patterns require deeper reasoning than pattern-matching
 - **Responsibilities:**
   - Reviews Transaction lifecycle (Start/Commit/Dispose, nested transactions)
   - Checks for common pitfalls: accessing elements outside valid context, modifying read-only parameters, wrong BuiltInParameter usage
@@ -264,9 +277,9 @@ System prompt for the agent in markdown.
   - Framework-aware: different patterns for 4.8 vs 8.0
 - **Tools:** Read, Grep, Glob, WebSearch, WebFetch
 
-### 4.2 `wpf-reviewer`
+### 4.3 `wpf-reviewer`
 
-- **Model:** sonnet
+- **Model:** haiku (review role — pattern-matching, lower token cost)
 - **Color:** cyan
 - **Triggered when:** `.xaml` or ViewModel files are modified
 - **Responsibilities:**
@@ -277,9 +290,9 @@ System prompt for the agent in markdown.
   - Validates DependencyProperty declarations (correct metadata, callbacks)
 - **Tools:** Read, Grep, Glob
 
-### 4.3 `solid-checker`
+### 4.4 `solid-checker`
 
-- **Model:** sonnet
+- **Model:** haiku (review role — pattern-matching, lower token cost)
 - **Color:** green
 - **Triggered when:** During code review, `/solid-review`, or when Claude detects SOLID-relevant changes
 - **Responsibilities:**
@@ -306,6 +319,7 @@ System prompt for the agent in markdown.
 ├── agents/
 │   ├── senior-wpf-developer.md                  # Already exists
 │   ├── code-improvement-advisor.md              # Already exists
+│   ├── codebase-investigator.md                  # NEW
 │   ├── revit-api-expert.md                      # NEW
 │   ├── wpf-reviewer.md                          # NEW
 │   └── solid-checker.md                         # NEW
@@ -327,9 +341,7 @@ System prompt for the agent in markdown.
     │       ├── updater.cs.template
     │       ├── dockable-panel.cs.template
     │       └── external-application.cs.template
-    ├── solid-review/
-    │   └── SKILL.md                             # NEW
-    └── build/
+    └── solid-review/
         └── SKILL.md                             # NEW
 ```
 
@@ -426,43 +438,147 @@ The existing `settings.json` will be updated to add hooks while preserving curre
 ## 8. Development Flow
 
 ```
-Investigate ──> Plan ──> Implement ──> Build ──> Review ──> Commit ──> PR
-    |              |          |            |          |          |        |
-    v              v          v            v          v          v        v
-/investigate  brainstorm  /wpf-new    /build    /solid-review /commit /create-pr
-/revit-       writing-    /revit-new  build     solid-checker  build   existing
- research     plans       senior-wpf  hook      wpf-reviewer   hook
-              existing    agent       (gate)    revit-expert   commit
-                                                code-improv.   lint
-                                                advisor        diff warn
+Investigate ──> Plan ──> Agent Pipelines (parallel or sequential) ──> Test in Revit ──> Commit ──> PR
+    |              |                                                                      |        |
+    v              v                                                                      v        v
+/investigate  brainstorm      ┌─────────────────────────────┐                         /commit /create-pr
+/revit-       writing-plans   │  Pipeline per task:          │                          build
+ research     (decides        │                              │                          hook
+codebase-     pipelines)      │  Implement ──> Build ──> Review                        commit lint
+ investigator                  │      ^                   |   │                         diff warn
+                              │      +── fix loop ──────-+   │
+                              │                              │
+                              │  WPF:   senior-wpf-dev       │
+                              │         /build + wpf-reviewer │
+                              │                              │
+                              │  Revit: revit-api-expert     │
+                              │         /build + solid-checker│
+                              │                              │
+                              │  C#:    Claude direct        │
+                              │         /build + code-improv. │
+                              └─────────────────────────────┘
 ```
+
+### Implementation model: plan-driven agent teams
+
+The **Plan phase** determines whether tasks are independent enough for parallel agent teams or must be sequential. Each implementation agent runs in its own **pipeline** with a paired build and review agent.
+
+#### Agent pipelines
+
+Each pipeline is a self-contained loop:
+
+```
+[Implement Agent] ──> [Build Agent] ──> [Review Agent]
+        ^                                     |
+        +─── fix issues ─────────────────────-+
+```
+
+| Pipeline | Implement | Build | Review |
+|---|---|---|---|
+| **WPF pipeline** | `senior-wpf-developer` | `/build` | `wpf-reviewer` + `solid-checker` |
+| **Revit API pipeline** | `revit-api-expert` | `/build` | `solid-checker` |
+| **General C# pipeline** | Claude (direct) | `/build` | `solid-checker` + `code-improvement-advisor` |
+
+#### When to use parallel vs sequential pipelines
+
+Decided during the **Plan phase** (`superpowers:writing-plans`):
+
+- **Parallel pipelines** — when the plan identifies independent tasks that don't share files or interfaces (e.g., a new converter + an unrelated Revit command)
+- **Sequential pipeline** — when tasks are tightly coupled (e.g., ViewModel depends on Revit API service class). One pipeline finishes before the next starts.
+- **Single pipeline** — when the task is small or everything is coupled
+
+#### Pipeline flow
+
+1. **Plan** identifies tasks and assigns pipelines (parallel or sequential)
+2. Each pipeline's **implement agent** writes code (in a worktree if parallel)
+3. Each pipeline's **build agent** verifies compilation
+4. Each pipeline's **review agent(s)** check the result
+5. If review finds issues → loop back to implement within that pipeline
+6. Once all pipelines pass → **Proceed** to Test in Revit -> Commit -> PR
+   (Build hook at commit time catches any cross-pipeline conflicts)
+
+#### No separate cross-pipeline review needed
+
+Each pipeline already includes build + review. If parallel pipelines produce conflicting code, the PreToolUse build hook catches it at commit time (won't compile = blocked). This avoids a redundant review step.
+
+### Investigate -> Plan handoff
+
+`/investigate` outputs feed directly into brainstorming. Brainstorming **skips context gathering** (already done) and focuses only on design decisions:
+
+1. `/investigate` delivers: root cause, relevant files, existing patterns, proposed solutions
+2. `superpowers:brainstorming` receives those findings and focuses on:
+   - **Design decisions** that investigation didn't resolve (architecture choices, trade-offs)
+   - **Approach selection** — which of the proposed solutions to pursue
+   - **Pipeline assignment** — which agents handle which tasks
+   - Skips: codebase exploration, context gathering, problem analysis (already done)
+3. `superpowers:writing-plans` takes the approved design and creates the implementation plan, including:
+   - **Pipeline budget** — how many pipelines to run, balancing token cost vs work volume
+   - **Task grouping** — small related tasks grouped into one pipeline to avoid overhead
+   - **Pipeline assignments** — which agents handle which task groups
+
+### Pipeline budgeting (decided during Plan phase)
+
+The plan should explicitly weigh cost vs parallelism:
+
+| Work size | Pipeline strategy | Rationale |
+|---|---|---|
+| Small (1-2 files, one domain) | Single pipeline, no agents | Agent overhead costs more than doing it directly |
+| Medium (3-5 files, one domain) | Single pipeline, one implement agent | Agent adds value, but parallelism not needed |
+| Medium (3-5 files, mixed domains) | 2 pipelines if domains are independent | WPF and Revit can run in parallel |
+| Large (6+ files, multiple domains) | 2-3 pipelines max | More pipelines = more token overhead, diminishing returns |
+
+**Rules:**
+- Never more than 3 parallel pipelines — token cost scales linearly, value doesn't
+- Group small tasks into one pipeline rather than giving each its own
+- Skip agent dispatch for trivial changes (rename, one-line fix) — do them directly
+- Scaffolding (`/wpf-new`, `/revit-new`) doesn't need a pipeline — just run the skill
 
 ### How the layers interact
 
 1. **SessionStart hook** detects framework -> visible to Claude for all subsequent work
 2. **User invokes skill** (e.g., `/solid-review`) -> skill instructions guide Claude to read changed files and consider dispatching relevant agents
 3. **Claude dispatches agents** based on file types and content (Revit API types -> `revit-api-expert`, XAML -> `wpf-reviewer`, C# -> `solid-checker`)
-4. **PreToolUse hook on Bash** -> when `git commit` is detected, build gate runs and diff size is checked
-5. **PostToolUse hook on Bash** -> after `git commit` succeeds, commit message format is validated
+4. **If review finds issues** -> loop back to Implement -> Build -> Review
+5. **PreToolUse hook on Bash** -> when `git commit` is detected, build gate runs and diff size is checked
+6. **PostToolUse hook on Bash** -> after `git commit` succeeds, commit message format is validated
 
 ---
 
-## 9. Implementation Order
+## 9. Token Cost Strategy
+
+| Component | Model | Cost | Rationale |
+|---|---|---|---|
+| Hooks | N/A (shell) | Free | No LLM tokens |
+| `/wpf-new`, `/revit-new` skills | Inherits parent | Low | Loaded once per invocation |
+| `/solid-review` skill | sonnet (forked) | Low | Runs in subagent, not opus |
+| `/investigate` skill | sonnet (forked) | Low | Runs in subagent, not opus |
+| `codebase-investigator` | haiku | Low | Read-only exploration, pattern-matching |
+| `senior-wpf-developer` | sonnet | Medium | Implementation needs reasoning |
+| `revit-api-expert` | sonnet | Medium | Implementation needs API knowledge |
+| `wpf-reviewer` | haiku | Low | Pattern-matching review |
+| `solid-checker` | haiku | Low | Pattern-matching review |
+| `code-improvement-advisor` | sonnet | Medium | Already exists, keep as-is |
+
+**Design principle:** Implementation agents use `sonnet` (needs reasoning). Review agents use `haiku` (checking patterns, cheaper). Hooks use zero tokens.
+
+---
+
+## 10. Implementation Order
 
 Build in this order to get value incrementally:
 
 1. **Hooks** (settings.json) — immediate value, no new files needed beyond config
-2. **`/build` skill** — most frequently used, simplest skill
+2. **`codebase-investigator` agent** — enables improved `/investigate` workflow
 3. **`solid-checker` agent** — enables review workflow
 4. **`/solid-review` skill** — ties into `solid-checker` + existing agents
-5. **`revit-api-expert` agent** — domain-specific value
+5. **`revit-api-expert` agent** — domain-specific implementation + review
 6. **`wpf-reviewer` agent** — complements existing `senior-wpf-developer`
 7. **`/wpf-new` skill + templates** — scaffolding, most template work
 8. **`/revit-new` skill + templates** — scaffolding, Revit-specific
 
 ---
 
-## 10. Success Criteria
+## 11. Success Criteria
 
 - [ ] `dotnet build` failure blocks commits across all projects
 - [ ] Framework is auto-detected and visible to Claude at session start
