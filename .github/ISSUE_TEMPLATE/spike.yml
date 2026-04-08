@@ -1,0 +1,37 @@
+name: Spike
+description: 技術調査・検証用のテンプレート / Template for technical investigation and verification
+title: "[Spike]"
+body:
+  - type: dropdown
+    id: categories_classification
+    attributes:
+      label: Categories
+      description: このタスクのCategoryを選択してください
+      options:
+        - Spike
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 注意事項 / Notes
+        - 調査の目的と期待する成果物を明確に記載してください。 / Please clearly describe the purpose of the investigation and expected deliverables.
+        - 必要に応じて、DocumentのLinkを添付するようにお願いします。 / If necessary, please attach a link to the document.
+
+  - type: textarea
+    id: spike-description
+    attributes:
+      label: 説明 / Description
+      description: 調査内容を記載してください / Describe about the spike
+      placeholder: |
+        確認モデル: https://drive.google.com/...
+        - [ ] ...の動作ができるか
+        - [ ] ...のパラメータがとれるか
+
+  - type: input
+    id: target-release
+    attributes:
+      label: ブランチ or リリース対象 / Target Branch or Release
+      description: 対象となるブランチやリリースを記載してください / Specify the target branch or release
+      placeholder: https://github.com/ArentInc/kandenkou-revit-addin/...

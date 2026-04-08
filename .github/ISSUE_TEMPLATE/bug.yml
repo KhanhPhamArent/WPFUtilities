@@ -1,0 +1,69 @@
+name: Bug
+description: バグ対応、軽微な修正用のテンプレート / Template for bug fixes, and minor fixes
+title: "[Bug]"
+body:
+  - type: dropdown
+    id: categories_classification
+    attributes:
+      label: Categories
+      description: このタスクのCategoryを選択してください
+      options:
+        - Bug
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 注意事項 / Notes
+        - 明確な受け入れ基準の記入をお願いします。 / Please provide clear acceptance criteria.
+        - 必要に応じて、DocumentのLinkを添付するようにお願いします。 / If necessary, please attach a link to the document.
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 再現手順 / Reproduction Steps
+
+  - type: input
+    id: reproduction-model
+    attributes:
+      label: 再現モデル / Reproduction Model
+      description: 問題が発生するモデルを添付してください / Paste the model link where the issue occurs
+      placeholder: https://drive.google.com/...
+
+  - type: textarea
+    id: reproduction-steps-text
+    attributes:
+      label: 手順説明/ Steps Description
+      description: 再現手順をテキスト/リンクで説明してください / Describe the reproduction steps or paste the link.
+      placeholder: https://www.notion.so/arent/...
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 受け入れ基準 / Acceptance Criteria
+
+  - type: textarea
+    id: acceptance-description
+    attributes:
+      label: 説明（テキスト）/ Description (Text)
+      description: 受け入れ基準を記載してください / Describe the acceptance criteria
+      value: |
+        ## 受け入れ基準 / Acceptance Criteria
+        - [ ] ...が正常に動作すること
+        - [ ] ...の機能が実装されていること
+        - [ ] ...のエラーが発生しないこと
+
+  - type: input
+    id: acceptance-model
+    attributes:
+      label: 確認モデル / Verification Model
+      description: 受け入れ基準を確認するモデルのGoogle Driveリンクを記載してください / Paste the Google Drive link for the verification model
+      placeholder: https://drive.google.com/...
+
+  - type: input
+    id: target-release
+    attributes:
+      label: ブランチ or リリース対象 / Target Branch or Release
+      description: 対象となるブランチやリリースを記載してください / Specify the target branch or release
+      placeholder: https://github.com/ArentInc/kandenkou-revit-addin/...

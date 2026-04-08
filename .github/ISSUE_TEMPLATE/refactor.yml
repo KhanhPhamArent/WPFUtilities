@@ -1,0 +1,60 @@
+name: Refactor
+description: リファクタ用のテンプレート / Template for bug fixes, refactorings, and minor fixes
+title: "[Refactor]"
+body:
+  - type: dropdown
+    id: categories_classification
+    attributes:
+      label: Categories
+      description: このタスクのCategoryを選択してください
+      options:
+        - Refactor
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 注意事項 / Notes
+        - 明確な受け入れ基準の記入をお願いします。 / Please provide clear acceptance criteria.
+        - 必要に応じて、DocumentのLinkを添付するようにお願いします。 / If necessary, please attach a link to the document.
+
+  - type: textarea
+    id: spike-description
+    attributes:
+      label: 説明 / Description
+      description: リファクタの概要を記載してください / Describe about the refactor
+      placeholder: |
+        確認モデル: https://drive.google.com/...
+        ...の処理速度を...の方法で上げる
+        ...のクラス構造を...に沿って修正する
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 受け入れ基準 / Acceptance Criteria
+
+  - type: textarea
+    id: acceptance-description
+    attributes:
+      label: 説明（テキスト）/ Description (Text)
+      description: 受け入れ基準を記載してください / Describe the acceptance criteria
+      value: |
+        ## 受け入れ基準 / Acceptance Criteria
+        - [ ] ...が正常に動作すること
+        - [ ] ...の機能が実装されていること
+        - [ ] ...のエラーが発生しないこと
+
+  - type: input
+    id: acceptance-model
+    attributes:
+      label: 確認モデル / Verification Model
+      description: 受け入れ基準を確認するモデルのGoogle Driveリンクを記載してください / Paste the Google Drive link for the verification model
+      placeholder: https://drive.google.com/...
+
+  - type: input
+    id: target-release
+    attributes:
+      label: ブランチ or リリース対象 / Target Branch or Release
+      description: 対象となるブランチやリリースを記載してください / Specify the target branch or release
+      placeholder: https://github.com/ArentInc/kandenkou-revit-addin/...

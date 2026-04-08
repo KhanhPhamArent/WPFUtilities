@@ -1,0 +1,539 @@
+name: Build
+run-name: ${{ github.workflow }} Revit ${{ github.event.inputs.revit-version || '2026' }}, (upload-module=${{ format('{0}', inputs.upload-module || 'false') }})
+
+on:
+  push:
+    branches:
+      - "main"
+    paths-ignore:
+      - "README.md"
+      - "aqua.yaml"
+      - ".cursor/**"
+      - ".cursorignore"
+  pull_request:
+    branches:
+      - "main"
+    paths-ignore:
+      - "README.md"
+      - "aqua.yaml"
+      - ".cursor/**"
+      - ".cursorignore"
+  workflow_dispatch:
+    inputs:
+      revit-version:
+        description: "revit-version: the Revit version you want to create. (Default: 2026)"
+        required: false
+        type: choice
+        options:
+          - 2026
+          - 2024
+        default: 2026
+      upload-module:
+        description: "upload-module: true will upload the modules."
+        required: true
+        default: false
+        type: boolean
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  SOLUTION_PATH: ${{ github.workspace }}\Arent3d.Architecture.Kandenkou.sln
+  CONFIGURATION: Release
+  TARGET_REVIT_VERSION: ${{ github.event.inputs.revit-version || '2026' }}
+  PLATFORM: x64
+  # Specify net48 for Revit versions earlier than Revit 2025, and specify net8.0-windows for Revit 2025 and later.
+  FRAMEWORK: ${{ github.event.inputs.revit-version >= 2025 && 'net8.0-windows' || 'net48' }}
+
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-2025
+    timeout-minutes: 20 # Increased to accommodate build + runner check + list test projects steps.
+
+    permissions:
+      contents: read
+      actions: read
+
+    outputs:
+      runner-available: ${{ steps.check.outputs.available }}
+      runner-name: ${{ steps.check.outputs.runner_name }}
+      revit-test-projects: ${{ steps.list.outputs.revit-test-projects }}
+      standard-test-projects: ${{ steps.list.outputs.standard-test-projects }}
+      has-revit-tests: ${{ steps.project-check.outputs.has-revit-tests }}
+      has-standard-tests: ${{ steps.project-check.outputs.has-standard-tests }}
+
+    steps:
+      - run: Get-Content "$Env:GITHUB_EVENT_PATH" | Out-String | Write-Host
+
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0  # SonarQube の解析精度向上のため浅いクローンを無効化
+
+      - name: Setup msbuild
+        uses: microsoft/setup-msbuild@6fb02220983dee41ce7ae257b6f4d8f9bf5ed4ce # v2.0.0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@be666c2fcd27ec809703dec50e508c2fdc7f6654 # v5.2.0
+        with:
+          java-version: 17
+          distribution: 'zulu'
+
+      - name: Cache SonarQube packages
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}\sonar-cache
+          key: ${{ runner.os }}-sonar
+          restore-keys: ${{ runner.os }}-sonar
+
+      - name: Cache SonarQube scanner
+        id: cache-sonar-scanner
+        uses: actions/cache@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        with:
+          path: ${{ runner.temp }}\sonar-scanner
+          key: ${{ runner.os }}-sonar-scanner
+          restore-keys: ${{ runner.os }}-sonar-scanner
+
+      - name: Install SonarQube scanner
+        if: steps.cache-sonar-scanner.outputs.cache-hit != 'true'
+        shell: pwsh
+        run: |
+          New-Item -Path ${{ runner.temp }}\sonar-scanner -ItemType Directory
+          dotnet tool update dotnet-sonarscanner --tool-path ${{ runner.temp }}\sonar-scanner
+
+      - name: Begin SonarQube Analysis
+        shell: pwsh
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+        run: |
+          ${{ runner.temp }}\sonar-scanner\dotnet-sonarscanner begin `
+            /k:"ArentInc_kandenkou-revit-addin_d08d2144-f2ae-4d65-96ae-869e39018faf" `
+            /d:sonar.token="$env:SONAR_TOKEN" `
+            /d:sonar.host.url="$env:SONAR_HOST_URL"
+
+      - name: Build(${{ env.CONFIGURATION }} ${{ env.TARGET_REVIT_VERSION }})
+        run: |
+          .\.github\scripts\build.ps1 -SolutionPath "${{ env.SOLUTION_PATH }}" -Configuration "${{ env.CONFIGURATION }} ${{ env.TARGET_REVIT_VERSION }}" -Platform "${{ env.PLATFORM }}"
+        shell: pwsh
+
+      - name: End SonarQube Analysis
+        shell: pwsh
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          ${{ runner.temp }}\sonar-scanner\dotnet-sonarscanner end /d:sonar.token="$env:SONAR_TOKEN"
+
+      - name: Upload artifact(${{ env.CONFIGURATION }} ${{ env.TARGET_REVIT_VERSION }})
+        if: ${{ github.event.inputs.upload-module == 'true' }}
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: artifact-${{ env.CONFIGURATION }}${{ env.TARGET_REVIT_VERSION }}-${{ env.PLATFORM }}-${{ github.sha }}
+          path: ${{ github.workspace }}\Arent3d.Architecture.Kandenkou.General.App\bin\Release\${{ env.TARGET_REVIT_VERSION }}\${{ env.FRAMEWORK }}\
+          if-no-files-found: error
+          retention-days: 1
+
+      # ===== テストプロジェクトをリストアップ =====
+      - name: List and classify test projects
+        id: list
+        uses: ./.github/actions/list-test-projects
+
+      - name: Check if projects exist
+        id: project-check
+        shell: pwsh
+        run: |
+          $revitTests = '${{ steps.list.outputs.revit-test-projects }}'
+          $standardTests = '${{ steps.list.outputs.standard-test-projects }}'
+
+          $hasRevit = if ($revitTests -and $revitTests -ne '[]' -and $revitTests -ne '') { 'true' } else { 'false' }
+          $hasStandard = if ($standardTests -and $standardTests -ne '[]' -and $standardTests -ne '') { 'true' } else { 'false' }
+
+          echo "has-revit-tests=$hasRevit" >> $env:GITHUB_OUTPUT
+          echo "has-standard-tests=$hasStandard" >> $env:GITHUB_OUTPUT
+
+          Write-Host "RevitTest参照あり: $hasRevit"
+          Write-Host "RevitTest参照なし: $hasStandard"
+
+      # ===== Self-hosted runner の状態チェック =====
+      - name: Set Runner Online Status
+        id: check
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.RUNNER_CHECK_TOKEN }}
+        run: |
+          # runnerの稼働チェック
+          Write-Host "Checking runner status..."
+
+          $headers = @{
+            "Accept" = "application/vnd.github+json"
+            "Authorization" = "Bearer $env:GITHUB_TOKEN"
+            "X-GitHub-Api-Version" = "2022-11-28"
+          }
+
+          $uri = "https://api.github.com/repos/${{ github.repository }}/actions/runners"
+          try {
+            Write-Host "Requesting: $uri"
+            $response = Invoke-RestMethod -Uri $uri -Headers $headers -Method Get
+
+            Write-Host "✅ API call successful"
+            Write-Host "Total runners: $($response.total_count)"
+
+            if ($response.total_count -eq 0) {
+              Write-Host "`n⚠️ No runners registered"
+              "available=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              exit 0
+            }
+
+            Write-Host "`nRunner details:"
+            $response.runners | ForEach-Object {
+              $labelNames = $_.labels | ForEach-Object { $_.name }
+              Write-Host "  - Name: $($_.name)"
+              Write-Host "    Status: $($_.status)"
+              Write-Host "    Busy: $($_.busy)"
+              Write-Host "    Labels: $($labelNames -join ', ')"
+              Write-Host ""
+            }
+
+            # Revit ラベルを持つオンラインランナーを検索
+            $revitRunner = $response.runners | Where-Object {
+              $labelNames = $_.labels | ForEach-Object { $_.name }
+              ($labelNames -contains "Revit") -and ($_.status -eq "online") -and (-not $_.busy)
+            } | Select-Object -First 1
+
+            if ($revitRunner) {
+              Write-Host "✅ Revit runner available: $($revitRunner.name)"
+              "available=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+              "runner_name=$($revitRunner.name)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            } else {
+              Write-Host "❌ No online Revit runner found"
+
+              # デバッグ情報
+              $onlineRunners = $response.runners | Where-Object { $_.status -eq "online" }
+              $revitLabelRunners = $response.runners | Where-Object {
+                $labelNames = $_.labels | ForEach-Object { $_.name }
+                $labelNames -contains "Revit"
+              }
+
+              Write-Host "`nDebug info:"
+              Write-Host "  Online runners: $($onlineRunners.Count)"
+              Write-Host "  Runners with Revit label: $($revitLabelRunners.Count)"
+
+              "available=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            }
+
+          } catch {
+            Write-Host "❌ Error accessing runners API:"
+            Write-Host "  Status: $($_.Exception.Response.StatusCode.value__)"
+            Write-Host "  Message: $($_.Exception.Message)"
+
+            if ($_.ErrorDetails.Message) {
+              Write-Host "  Details: $($_.ErrorDetails.Message)"
+            }
+
+            "available=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            exit 1
+          }
+        continue-on-error: true
+
+      - name: Revit Test will run
+        if: steps.check.outputs.available == 'true'
+        shell: pwsh
+        run: Write-Host "::notice::A self-hosted runner with the 'Revit' label is online. Executing Revit Test."
+
+      - name: Revit Test will skip
+        if: steps.check.outputs.available != 'true'
+        shell: pwsh
+        run: |
+          Write-Host "::warning::⏭️ Tests will be skipped - Revit runner is not available"
+          Write-Host "::notice::Please ensure the self-hosted runner is online and has the 'Revit' label"
+
+  # ===== 標準 Runner: RevitTest参照なしのテスト =====
+  test-standard:
+    name: Test (Standard Projects) - Standard Runner
+    needs: [build]
+    if: needs.build.outputs.has-standard-tests == 'true'
+    runs-on: windows-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run all standard tests sequentially
+        id: test
+        shell: pwsh
+        run: |
+          $projects = @('${{ needs.build.outputs.standard-test-projects }}' | ConvertFrom-Json)
+          $allPassed = $true
+
+          foreach ($project in $projects) {
+            Write-Host "Testing: $project"
+            $projectName = [System.IO.Path]::GetFileNameWithoutExtension($project)
+
+            # csproj ファイルの親ディレクトリを取得
+            $projectDir = Split-Path -Parent (Resolve-Path $project)
+            Write-Host "Project directory: $projectDir"
+
+            # 前回のテスト結果を削除
+            $testResultsPath = Join-Path $projectDir "TestResults"
+            if (Test-Path $testResultsPath) {
+              Write-Host "Removing previous TestResults: $testResultsPath"
+              Remove-Item -Path $testResultsPath -Recurse -Force
+            }
+
+            # テスト結果格納フォルダ作成
+            $testResultsDir = "${{ github.workspace }}/test-results/$projectName"
+            if (Test-Path $testResultsDir) {
+              Write-Host "Removing previous TestResults: $testResultsDir"
+              Remove-Item -Path $testResultsDir -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $testResultsDir -Force | Out-Null
+
+            dotnet test $project `
+              --configuration "${{ env.CONFIGURATION }} ${{ env.TARGET_REVIT_VERSION }}" `
+              --verbosity normal `
+              --logger "trx;LogFileName=$testResultsDir/test-results.trx" `
+              --collect:"XPlat Code Coverage" `
+              /p:SolutionDir="${{ github.workspace }}\" `
+              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+            # Cobertura XMLをコピー
+            $coverageFiles = Get-ChildItem -Recurse -Path "$projectDir/TestResults" -Filter "*cobertura.xml" -ErrorAction SilentlyContinue
+            foreach ($file in $coverageFiles) {
+              Copy-Item -Path $file.FullName -Destination "$testResultsDir/coverage.cobertura.xml" -Force
+              Write-Host "Copied coverage file: $($file.FullName)"
+            }
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::warning::Tests failed for $project"
+              $allPassed = $false
+            }
+          }
+
+          if (-not $allPassed) {
+            exit 1
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: standard-test-results
+          path: ${{ github.workspace }}/test-results/
+          if-no-files-found: ignore
+
+  # ===== Self-hosted Runner: RevitTest参照ありのテスト =====
+  test-revit:
+    name: Test (RevitTest Projects) - Self-Hosted
+    needs: [build]
+    if: needs.build.outputs.has-revit-tests == 'true' && needs.build.outputs.runner-available == 'true'
+    runs-on: [self-hosted, Windows, X64, Revit] # actionlint-disable-line runner-label
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      checks: write
+    steps:
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Run all revit tests sequentially
+        id: test
+        shell: pwsh
+        run: |
+          $projects = @('${{ needs.build.outputs.revit-test-projects }}' | ConvertFrom-Json)
+          $allPassed = $true
+
+          foreach ($project in $projects) {
+            Write-Host "Testing: $project"
+            $projectName = [System.IO.Path]::GetFileNameWithoutExtension($project)
+
+            # csproj ファイルの親ディレクトリを取得
+            $projectDir = Split-Path -Parent (Resolve-Path $project)
+            Write-Host "Project directory: $projectDir"
+
+            # 前回のテスト結果を削除
+            $testResultsPath = Join-Path $projectDir "TestResults"
+            if (Test-Path $testResultsPath) {
+              Write-Host "Removing previous TestResults: $testResultsPath"
+              Remove-Item -Path $testResultsPath -Recurse -Force
+            }
+
+            # テスト結果格納フォルダ作成
+            $testResultsDir = "${{ github.workspace }}/test-results/$projectName"
+            if (Test-Path $testResultsDir) {
+              Write-Host "Removing previous TestResults: $testResultsDir"
+              Remove-Item -Path $testResultsDir -Recurse -Force
+            }
+            New-Item -ItemType Directory -Path $testResultsDir -Force | Out-Null
+
+            dotnet test $project `
+              --configuration "${{ env.CONFIGURATION }} ${{ env.TARGET_REVIT_VERSION }}" `
+              --verbosity normal `
+              --logger "trx;LogFileName=$testResultsDir/test-results.trx" `
+              --collect:"XPlat Code Coverage" `
+              /p:SolutionDir="${{ github.workspace }}\" `
+              -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+            # Cobertura XMLをコピー
+            $coverageFiles = Get-ChildItem -Recurse -Path "$projectDir/TestResults" -Filter "*cobertura.xml" -ErrorAction SilentlyContinue
+            foreach ($file in $coverageFiles) {
+              Copy-Item -Path $file.FullName -Destination "$testResultsDir/coverage.cobertura.xml" -Force
+              Write-Host "Copied coverage file: $($file.FullName)"
+            }
+
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "::warning::Tests failed for $project"
+              $allPassed = $false
+            }
+          }
+
+          if (-not $allPassed) {
+            exit 1
+          }
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: revit-test-results
+          path: ${{ github.workspace }}/test-results/
+          if-no-files-found: ignore
+
+  # ===== 標準 Runner で結果をレポート =====
+  publish-results:
+    name: Publish Test Results
+    needs: [test-standard, test-revit]
+    runs-on: windows-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: write
+    if: always()
+    steps:
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+
+      - name: Download test results
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          path: test-results
+
+      - name: List downloaded files
+        shell: pwsh
+        run: |
+          Write-Host "Downloaded test result files:"
+          Get-ChildItem -Recurse -Path test-results -Include *.trx | ForEach-Object {
+            Write-Host "  - $($_.FullName)"
+          }
+
+      - name: Test Report
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+        id: test-report
+        if: always()  # テストが失敗しても必ず実行
+        with:
+          name: NUnit Tests Summary  # GitHub上に表示される名前
+          path: "test-results/**/*.trx" # 作成されたtrxファイルのパス
+          reporter: dotnet-trx        # NUnit/xUnit用のフォーマット指定
+
+      - name: Add to Summary
+        if: always()
+        run: |
+          echo "### Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "See [Test Report](${{ steps.test-report.outputs.url_html }})" >> $GITHUB_STEP_SUMMARY
+
+      - name: Generate Multi-Project Summary
+        if: always()
+        shell: pwsh
+        run: |
+          $summary = "### 📊 Multi-Project Test Report`n"
+          $summary += "| Project | Pass Rate | ✅ Pass | ❌ Fail | ⚠️ Skip | ⏱️ Time | 📉 Coverage |`n"
+          $summary += "| :--- | :--- | :--- | :--- | :--- | :--- | :--- |`n"
+
+          $totalPassed = 0
+          $totalFailed = 0
+          $totalSkipped = 0
+          $totalTests = 0
+          $totalTime = [TimeSpan]::Zero
+
+          # 全てのTRXファイルをループ処理
+          Get-ChildItem -Recurse -Filter "*.trx" | ForEach-Object {
+              [xml]$trx = Get-Content $_.FullName
+              # --- ディレクトリ名からプロジェクト名を抽出 ---
+              # 構造: .../Arent3d.Revit.Hps.Application.Tests/TestResults/test-results.trx
+              # $_.Directory は TestResults フォルダを指すので、その親 (Parent) がプロジェクト名
+              # $projectName = $_.Directory.Parent.Name
+              # 構造: .../test-results/Arent3d.Revit.Hps.Application.Tests/test-results.trx
+              # $_.Directory は プロジェクト フォルダを指すので、その名前がプロジェクト名
+              $projectName = $_.Directory.Name
+
+              # もしパス構造が違う場合のための保険（ファイル名から抽出など）
+              if ($projectName -eq "TestResults" -or $projectName -eq "Debug" -or $projectName -eq "Release") {
+                  $projectName = $_.Directory.Parent.Parent.Name
+              }
+              # -----------------------------------------------
+              $passed = [int]$trx.TestRun.ResultSummary.Counters.passed
+              $failed = [int]$trx.TestRun.ResultSummary.Counters.failed
+              $total = [int]$trx.TestRun.ResultSummary.Counters.total
+              $executed = [int]$trx.TestRun.ResultSummary.Counters.executed
+              $skipped = $total - $executed
+              # --- 時間取得 ---
+              $durationTS = [TimeSpan]::Zero
+              $startStr =  $trx.TestRun.Times.start
+              $finishStr = $trx.TestRun.Times.finish
+
+              if ($startStr -and $finishStr) {
+                  $startTime = [DateTime]::Parse($startStr)
+                  $finishTime = [DateTime]::Parse($finishStr)
+                  $durationTS = $finishTime - $startTime
+              }
+
+              $totalTime = $totalTime.Add($durationTS)
+              $displayTime = "$([math]::Round($durationTS.TotalSeconds, 2))s"
+              # -----------------------------------------------
+              $rate = if ($total -gt 0) { [math]::Round(($passed / $total) * 100, 2) } else { 0 }
+
+              # 対応するカバレッジファイルを探す (TRXと同じディレクトリ階層を想定)
+              $covFile = Get-ChildItem -Path $_.Directory.FullName -Recurse -Filter "*cobertura.xml" | Select-Object -First 1
+              $coverage = "N/A"
+              if ($covFile) {
+                  [xml]$xml = Get-Content $covFile.FullName
+                  $coverage = "$([math]::Round(([double]$xml.coverage."line-rate") * 100, 2)) %"
+              }
+
+              $summary += "| $projectName | $rate % | $passed | $failed | $skipped | $displayTime | $coverage |`n"
+
+              # 合計加算
+              $totalPassed += $passed
+              $totalFailed += $failed
+              $totalSkipped += $skipped
+              $totalTests += $total
+          }
+
+          # 合計行の追加
+          $totalRate = if ($totalTests -gt 0) { [math]::Round(($totalPassed / $totalTests) * 100, 2) } else { 0 }
+          $totalTimeDisplay = "$([math]::Round($totalTime.TotalSeconds, 2))s"
+          $summary += "| **TOTAL** | **$totalRate %** | **$totalPassed** | **$totalFailed** | **$totalSkipped** | **$totalTimeDisplay** | - |`n"
+
+          # GitHub Summaryへ出力 (UTF8でBOMなし保存)
+          $summary | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8

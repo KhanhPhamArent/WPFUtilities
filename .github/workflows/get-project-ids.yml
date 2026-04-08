@@ -1,0 +1,45 @@
+name: Get Project IDs
+
+on:
+  workflow_dispatch:
+
+jobs:
+  get-ids:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions: 
+      contents: read 
+    steps:
+      - uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+          script: |
+            // ProjectのIDを取得
+            const query = `
+              query($owner: String!, $number: Int!) {
+                organization(login: $owner) {
+                  projectV2(number: $number) {
+                    id
+                    fields(first: 20) {
+                      nodes {
+                        ... on ProjectV2SingleSelectField {
+                          id
+                          name
+                          options {
+                            id
+                            name
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `;
+
+            const result = await github.graphql(query, {
+              owner: 'ArentInc',  // Organization名
+              number: 53  // ProjectのNumber（URLから確認）
+            });
+
+            console.log(JSON.stringify(result, null, 2));
