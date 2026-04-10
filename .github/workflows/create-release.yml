@@ -1,0 +1,311 @@
+name: Create-Release
+run-name: ${{ github.workflow }} (${{ inputs.app-version || inputs.asm-version }}, ${{ inputs.ref }}, dry-run=${{ format('{0}', inputs.dry-run) }}, revit-version=${{ inputs.revit-version }})
+
+on:
+  workflow_dispatch:
+    inputs:
+      asm-version:
+        description: "asm-version: the assembly version you want to create. (x.x.x.x style. example: 0.1.2.3)"
+        required: true
+        default: "0.0.0.0"
+      app-version:
+        description: "app-version: the application version you want to create. (Default: the value of asm-version.)"
+        required: false
+      ref:
+        description: "ref: the target branch/tag name to build. Default: 'main'."
+        required: false
+        default: "main"
+      dry-run:
+        description: "dry-run: true will never create release."
+        required: true
+        default: true
+        type: boolean
+      revit-version:
+        description: "revit-version: the Revit version you want to create. (Default: 2026)"
+        required: false
+        type: choice
+        options:
+          - 2026
+          - 2024
+        default: 2026
+
+env:
+  APP_DIR_GENERAL: Arent3d.Architecture.Kandenkou.General.App
+  ASM_VERSION: ${{ github.event.inputs.asm-version }}
+  APP_VERSION: ${{ github.event.inputs.app-version || github.event.inputs.asm-version }}
+  REVIT_VERSION: ${{ github.event.inputs.revit-version }}
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+  # AppId GUIDs for each Revit version
+  APP_ID_REVIT_2024: 8831a5ce-67d3-17da-0d9c-8554cd54e729
+  APP_ID_REVIT_2026: 998aea19-0d68-440c-b120-e619a9e57b9d
+  INSTALLER_BASE_NAME: KandenkoDLLInstaller
+  INSTALLER_FILE_NAME: Kandenko_Revit${{ github.event.inputs.revit-version || '2026' }}_addin_installer_v${{ github.event.inputs.app-version || github.event.inputs.asm-version }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-release:
+    runs-on: windows-2025
+    timeout-minutes: 10
+
+    outputs:
+      sha: ${{ steps.store-sha.outputs.sha }}
+
+    env:
+      SOLUTION_FILE: Arent3d.Architecture.Kandenkou.sln
+      DOTNET_VERSION: "9.0.x"
+      PLATFORM: x64
+      CONFIGURATION: Release ${{ github.event.inputs.revit-version }}
+
+    permissions:
+      contents: read
+
+    steps:
+      - run: Get-Content "$env:GITHUB_EVENT_PATH" | Out-String | Write-Host
+
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Store target SHA
+        id: store-sha
+        run: Write-Output "sha=$(git show --format='%H' --no-patch)" | Out-File -FilePath "$env:GITHUB_OUTPUT" -Encoding utf8 -Append
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7 # v5.2.0
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore NuGet packages
+        run: dotnet restore "$env:SOLUTION_FILE" /p:Configuration="$env:CONFIGURATION"
+
+      - name: Build solution
+        run: |
+          dotnet build "$env:SOLUTION_FILE" `
+            --configuration "$env:CONFIGURATION" `
+            --no-restore `
+            /p:InformationalVersion="$env:ASM_VERSION" `
+            /p:AssemblyVersion="$env:Version" `
+            /p:FileVersion="$env:Version" `
+            /p:Version="$env:Version" `
+            /p:ExecCI=true
+        env:
+          Version: ${{ env.ASM_VERSION }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: modules_general
+          path: ${{ github.workspace }}\${{ env.APP_DIR_GENERAL }}\bin\Release\
+          if-no-files-found: error
+          retention-days: 1
+
+  create-installer:
+    needs:
+      - build-release
+    runs-on: windows-2025
+    timeout-minutes: 5
+
+    env:
+      CERT_DIR_NAME: cert
+      CERT_FILE_NAME: ArentCert.cer
+      SCRIPT_DIR: .github\scripts\create-installer
+      INSTALLER_DIR: .github\scripts\create-installer\Output
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - run: Get-Content "$env:GITHUB_EVENT_PATH" | Out-String | Write-Host
+
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github
+
+      - name: Download build artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: modules_general
+          path: ${{ github.workspace }}\${{ env.APP_DIR_GENERAL }}\bin\Release\
+
+      - name: Prepare cert file
+        id: prepare-cert
+        run: |
+          $certDir = "${{ github.workspace }}\${{ env.SCRIPT_DIR }}\${{ env.CERT_DIR_NAME }}"
+          New-Item -Path $certDir -ItemType Directory | Out-Null
+          $certPath = Join-Path $certDir "${{ env.CERT_FILE_NAME }}"
+          [IO.File]::WriteAllBytes(
+            $certPath,
+            [Convert]::FromBase64String($env:CERT_BASE64)
+          )
+          Write-Host "Certificate saved to: $certPath"
+          # Export for use in subsequent steps
+          "cert-path=$certPath" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+        env:
+          CERT_BASE64: ${{ secrets.SECTIGO_CODE_SIGNING_CERT_BASE64 }}
+        shell: pwsh
+
+      - name: Generate signing file list
+        id: gen-sign-list
+        run: |
+          $listFile = Join-Path "${{ github.workspace }}" "sign-file-list.txt"
+          $targetRootGeneral = "${{ github.workspace }}\${{ env.APP_DIR_GENERAL }}\bin\Release\"
+          Write-Host "Scanning: $targetRootGeneral"
+          Get-ChildItem -Path $targetRootGeneral -Recurse -Depth 2 `
+            | Where-Object { $_.Name -like "Arent3d.*.dll" } `
+            | Select-Object -ExpandProperty FullName `
+            | Add-Content -Encoding UTF8 $listFile
+          Write-Host "Generated file list: $listFile"
+          Write-Output "file_list_path=$listFile" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+        shell: pwsh
+
+      - name: Sign Arent3d.*.dll
+        uses: ArentInc/gcloud-sign-action@8bba8381bbff83b9c991009a643e279e1f14a8d3 # v1.0.0
+        with:
+          input-file-list: ${{ steps.gen-sign-list.outputs.file_list_path }}
+          gcp-project-id: ${{ secrets.GCP_PROJECT_ID_ESIGN }}
+          gcp-workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER_ESIGN }}
+          gcp-service-account: ${{ secrets.GCP_SERVICE_ACCOUNT_ESIGN }}
+          gcp-kms-crypto-key-version: ${{ secrets.GCP_KMS_CRYPTO_KEY_VERSION_ESIGN }}
+          sectigo-code-signing-cert-path: ${{ steps.prepare-cert.outputs.cert-path }}
+
+      - name: Prepare config file
+        run: |
+          $srcPathGeneral = "${{ github.workspace }}\${{ env.APP_DIR_GENERAL }}\bin\"
+          $escapedSrcPathGeneral = $srcPathGeneral -replace "\\","\\"
+          $revitVersion = ${{ env.REVIT_VERSION }}
+          $targetFramework = "${{ env.REVIT_VERSION == '2024' && 'net48' || 'net8.0-windows' }}"
+
+          # Determine AppId based on Revit version
+          $appId = switch ($revitVersion) {
+            "2024" { "${{ env.APP_ID_REVIT_2024 }}" }
+            "2026" { "${{ env.APP_ID_REVIT_2026 }}" }
+            default {
+              Write-Error "AppId not defined for Revit version $revitVersion"
+              exit 1
+            }
+          }
+
+          # Replace placeholders
+          Get-Content -Encoding UTF8 config.json.template `
+          | ForEach-Object {$_ -replace "<appversion>", "${{ env.APP_VERSION }}"} `
+          | ForEach-Object {$_ -replace "<revitversion>", "$revitVersion"} `
+          | ForEach-Object {$_ -replace "<targetframework>", "$targetFramework"} `
+          | ForEach-Object {$_ -replace "<modules.srcpath.general>", "$escapedSrcPathGeneral"} `
+          | ForEach-Object {$_ -replace "<cerpath>", "${{ env.CERT_DIR_NAME }}"} `
+          | ForEach-Object {$_ -replace "<cername>", "${{ env.CERT_FILE_NAME }}"} `
+          | ForEach-Object {$_ -replace "<appid>", "$appId"} `
+          | ForEach-Object {$_ -replace "<outputfilename>", "${{ env.INSTALLER_BASE_NAME }}"} `
+          | Out-File -Encoding UTF8 config.json
+        shell: pwsh
+        working-directory: ${{ github.workspace }}\${{ env.SCRIPT_DIR }}\conf
+
+      - name: Install Inno Setup
+        run: |
+          choco uninstall innosetup -y
+          choco install innosetup -y --version=6.4.0
+
+      # The Build.bat calls GenerateInnoSetupScript.exe, which depends on .NET 8. Please prepare the .NET if it is not preinstalled.
+      - name: Create installer
+        run: .\Build.bat
+        shell: cmd
+        working-directory: ${{ github.workspace }}\${{ env.SCRIPT_DIR }}
+
+      - name: Rename installer
+        run: |
+          $installer = Get-ChildItem "${{ env.INSTALLER_BASE_NAME }}*.exe"
+          if (-not $installer) {
+              Write-Error "No file matching the pattern '${{ env.INSTALLER_BASE_NAME }}*.exe' was found."
+              exit 1
+          }
+          Write-Host "Found installer: $($installer.Name)"
+          Rename-Item -Path $installer.FullName -NewName "${{ env.INSTALLER_FILE_NAME }}.exe"
+        working-directory: ${{ github.workspace }}\${{ env.INSTALLER_DIR }}
+
+      - name: Sign installer
+        uses: ArentInc/gcloud-sign-action@8bba8381bbff83b9c991009a643e279e1f14a8d3 # v1.0.0
+        with:
+          input-file: ${{ github.workspace }}\${{ env.INSTALLER_DIR }}\${{ env.INSTALLER_FILE_NAME }}.exe
+          gcp-project-id: ${{ secrets.GCP_PROJECT_ID_ESIGN }}
+          gcp-workload-identity-provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER_ESIGN }}
+          gcp-service-account: ${{ secrets.GCP_SERVICE_ACCOUNT_ESIGN }}
+          gcp-kms-crypto-key-version: ${{ secrets.GCP_KMS_CRYPTO_KEY_VERSION_ESIGN }}
+          sectigo-code-signing-cert-path: ${{ steps.prepare-cert.outputs.cert-path }}
+
+      - name: Upload installer
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: ${{ env.INSTALLER_FILE_NAME }}
+          path: ${{ github.workspace }}\${{ env.INSTALLER_DIR }}\${{ env.INSTALLER_FILE_NAME }}.exe
+          if-no-files-found: error
+          retention-days: 1
+
+  create-release:
+    if: ${{ github.event.inputs.dry-run == false }}
+    needs:
+      - build-release
+      - create-installer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 1
+
+    env:
+      ARTIFACT_DIR_PATH: ${{ github.workspace }}
+
+    permissions:
+      contents: write
+
+    steps:
+      - run: cat "$GITHUB_EVENT_PATH"
+      - run: gh --version
+
+      - name: Enable Git long paths
+        run: git config --global core.longpaths true
+
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          ref: ${{ needs.build-release.outputs.sha }}
+
+      - name: Download artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ env.INSTALLER_FILE_NAME }}
+          path: ${{ env.ARTIFACT_DIR_PATH }}
+
+      - name: gh auth setup-git
+        run: gh auth setup-git
+        env:
+          GH_HOST: github.com
+        shell: bash
+
+      - name: Create and push tag
+        run: |
+          git tag "${{ env.TAG_NAME }}"
+          git push origin "${{ env.TAG_NAME }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: v${{ env.APP_VERSION }}
+        shell: bash
+
+      - name: Create release with assets
+        run: |
+          assetName="${{ env.INSTALLER_FILE_NAME }}.exe"
+          gh release create "${{ env.TAG_NAME }}" "${{ env.ARTIFACT_DIR_PATH }}/$assetName#$assetName" --generate-notes -d -p -t "${{ env.RELEASE_TITLE }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG_NAME: v${{ env.APP_VERSION }}
+          RELEASE_TITLE: v${{ env.APP_VERSION }}
+        shell: bash

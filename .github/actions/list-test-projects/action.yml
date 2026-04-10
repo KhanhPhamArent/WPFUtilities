@@ -1,0 +1,63 @@
+name: List Test Projects
+description: テストプロジェクトをリストアップし、RevitTest参照の有無で分類
+
+outputs:
+  revit-test-projects:
+    description: RevitTest参照ありのプロジェクト（JSON配列）
+    value: ${{ steps.list-projects.outputs.revit-test-projects }}
+
+  standard-test-projects:
+    description: RevitTest参照なしのプロジェクト（JSON配列）
+    value: ${{ steps.list-projects.outputs.standard-test-projects }}
+
+runs:
+  using: composite
+  steps:
+    - name: List and classify test projects
+      id: list-projects
+      shell: pwsh
+      run: |
+        $workspacePath = "${{ github.workspace }}"
+
+        # テストプロジェクトを検出
+        $testProjects = @()
+        $projectsWithRevitTest = @()
+        $projectsWithoutRevitTest = @()
+
+        # .csproj ファイルを検索
+        Get-ChildItem -Path $workspacePath -Include "*.csproj" -Recurse | ForEach-Object {
+          $projectFile = $_
+          $content = Get-Content $projectFile -Raw
+
+          # テストプロジェクトか確認（IsTestProject=true または Test を含む）
+          if ($projectFile.BaseName -match '\.Tests$'){
+            $fullPath = $projectFile.FullName
+
+            # 相対パスに変換
+            $relativePath = [System.IO.Path]::GetRelativePath($workspacePath, $fullPath)
+
+            $testProjects += $relativePath
+
+            # RevitTest参照を確認
+            if ($content -match 'ricaun\.RevitTest\.TestAdapter') {
+              $projectsWithRevitTest += $relativePath
+              Write-Host "✓ RevitTest参照あり: $($projectFile.Name) ($relativePath)"
+            } else {
+              $projectsWithoutRevitTest += $relativePath
+              Write-Host "✗ RevitTest参照なし: $($projectFile.Name) ($relativePath)"
+            }
+          }
+        }
+
+        # JSON配列として出力
+        $revitTestJson = @($projectsWithRevitTest) | ConvertTo-Json -AsArray -Compress
+        $standardJson = @($projectsWithoutRevitTest) | ConvertTo-Json -AsArray -Compress
+
+        echo "revit-test-projects=$revitTestJson" >> $env:GITHUB_OUTPUT
+        echo "standard-test-projects=$standardJson" >> $env:GITHUB_OUTPUT
+
+        Write-Host "`n=== 検出されたテストプロジェクト ==="
+        Write-Host "RevitTest参照あり ($($projectsWithRevitTest.Count)件):"
+        $projectsWithRevitTest | ForEach-Object { Write-Host "  - $_" }
+        Write-Host "`nRevitTest参照なし ($($projectsWithoutRevitTest.Count)件):"
+        $projectsWithoutRevitTest | ForEach-Object { Write-Host "  - $_" }

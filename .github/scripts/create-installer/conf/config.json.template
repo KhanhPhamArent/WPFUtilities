@@ -1,0 +1,31 @@
+﻿{
+  "Versions": [
+    {
+      "Name": "<revitversion>",
+      "SourcePath": "Release\\<revitversion>\\<targetframework>\\"
+    }
+  ],
+  "AppInfo": {
+    "AppName": "Kandenko",
+    "AppId": "<appid>",
+    "AppVersion": "<appversion>",
+    "IsIncludedLicense": false,
+    "IsIncludedManual": false,
+    "IsIncludedAppExe": false,
+    "OutputFilename": "<outputfilename>",
+    "AppExeName": "ArentDLLVersion.exe",
+    "CopyRight": "Arent Inc.",
+    "CustomConfig": {
+      "Icon": "logo\\arenticonlight_128.ico",
+      "CertTrustedPath": "<cerpath>\\",
+      "CertTrustedName": "<cername>"
+    }
+  },
+  "Modules": [
+    {
+      "Name": "Arent3d.Architecture.Kandenkou.General.App",
+      "SrcPath": "<modules.srcpath.general>",
+      "DestPath": "Arent3d.Kandenkou.General\\"
+    }
+  ]
+}

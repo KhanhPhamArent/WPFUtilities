@@ -1,0 +1,23 @@
+name: Documentation
+description: 要件定義、設計ドキュメント作成のテンプレート / Template for creation of design or requirements documents
+title: "[Documentation]"
+body:
+  - type: dropdown
+    id: categories_classification
+    attributes:
+      label: Categories
+      description: このタスクのCategoryを選択してください
+      options:
+        - Docs
+    validations:
+      required: true
+
+  - type: textarea
+    id: documentations-description
+    attributes:
+      label: 説明 / Description
+      description: 内容を記載してください / Describe with texts.
+      placeholder: |
+        確認モデル: https://drive.google.com/...
+        - [ ] ...のドキュメントを作成する。
+        - [ ] ...のドキュメントを作成する。

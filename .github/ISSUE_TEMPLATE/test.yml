@@ -1,0 +1,33 @@
+name: Test
+description: テスト用のテンプレート / Template for testing
+title: "[Test]"
+body:
+  - type: dropdown
+    id: categories_classification
+    attributes:
+      label: Categories
+      description: このタスクのCategoryを選択してください
+      options:
+        - Task
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        ## 注意事項 / Notes
+        - 親タスクがUserStoryの場合は、必ずテストドキュメントが必要です。 / If the parent task is a UserStory, it must have test documentation.
+
+  - type: textarea
+    id: test_model
+    attributes:
+      label: テストに使用するモデル / Model to use for testing
+      description: Google Driveのリンクを貼り付けてください / Please paste the Google Drive link
+      placeholder: https://drive.google.com/...
+
+  - type: textarea
+    id: test_document
+    attributes:
+      label: テストのドキュメント(UserStoryの場合) / Document for testing (In the UserStory case)
+      description: Google Driveのリンクを貼り付けてください / Please paste the Google Drive link
+      placeholder: https://drive.google.com/...

@@ -1,0 +1,35 @@
+name: Sync Issue to Project
+
+on:
+  issues:
+    types: [opened, edited]
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    permissions:
+      contents: read
+
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            .github/workflows/scripts
+            .github/ISSUE_TEMPLATE
+          sparse-checkout-cone-mode: false
+
+      - name: Parse Issue Body and Sync to Project
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8.0.0
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          github-token: ${{ secrets.PAT_TOKEN }}
+          script: |
+            const main = require('./.github/workflows/scripts/sync-issue-to-project.js');
+            await main({ github, context });
