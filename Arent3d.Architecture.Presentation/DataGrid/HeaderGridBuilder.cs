@@ -32,6 +32,7 @@ public class HeaderGridBuilder : IHeaderGridBuilder
     {
         var backgroundLookup = groupBackgrounds?.ToDictionary(e => e.GroupIndex, e => e.Background);
         var groupMap = new Dictionary<string, GroupInfo>();
+        var openGroups = new Dictionary<string, GroupInfo>();
         var topGroupKeys = new Dictionary<string, int>();
         var topGroupCounter = 0;
 
@@ -59,12 +60,18 @@ public class HeaderGridBuilder : IHeaderGridBuilder
                     topLevelGroupIdx = existingIdx;
                 }
 
-                if (!groupMap.TryGetValue(key, out var group))
+                GroupInfo group;
+                if (openGroups.TryGetValue(key, out var openGroup) && IsAdjacentTo(openGroup, columnIndex))
+                {
+                    group = openGroup;
+                }
+                else
                 {
                     group = CreateNewGroup(groupName, columnIndex, rowIndex, numberOfRows, strGroups.Length,
                         isFirstCreation, frozenColumnCount);
-                    group.Background = topLevelGroupIdx.HasValue && backgroundLookup != null && backgroundLookup.TryGetValue(topLevelGroupIdx.Value, out var bg) ? bg : null;
-                    groupMap[key] = group;
+                    group.Background = ResolveBackground(topLevelGroupIdx, backgroundLookup);
+                    groupMap[key + "@" + columnIndex] = group;
+                    openGroups[key] = group;
                 }
 
                 groups.Add(group);
@@ -85,7 +92,6 @@ public class HeaderGridBuilder : IHeaderGridBuilder
 
         if (hiddenColumns.Count > 0)
             ApplyVisibility(groupMap, numberOfRows, hiddenColumns);
-
         return groupMap;
     }
 
@@ -158,6 +164,17 @@ public class HeaderGridBuilder : IHeaderGridBuilder
             RowSpan = rowSpan,
             IsFrozen = columnIndex < frozenColumnCount
         };
+    }
+
+    private static bool IsAdjacentTo(GroupInfo group, int columnIndex)
+        => group.ColumnIndex + group.ColumnSpan == columnIndex;
+
+    private static Brush? ResolveBackground(int? topLevelGroupIdx, Dictionary<int, Brush?>? backgroundLookup)
+    {
+        return topLevelGroupIdx.HasValue
+            && backgroundLookup != null
+            && backgroundLookup.TryGetValue(topLevelGroupIdx.Value, out var bg)
+            ? bg : null;
     }
 
     private int CalculateRowSpan(bool isFirstCreation, int numberOfRows, int groupsLength)
