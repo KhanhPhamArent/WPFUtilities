@@ -1,7 +1,5 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
-using System.Windows.Media;
 using Microsoft.Xaml.Behaviors;
 
 namespace Arent3d.Architecture.Presentation.Behaviors;
@@ -12,28 +10,30 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
         DependencyProperty.Register(nameof(TargetScrollViewer), typeof(ScrollViewer),
             typeof(SyncHorizontalScrollBehavior));
 
-    public static readonly DependencyProperty DataGridProperty = DependencyProperty.Register(nameof(DataGrid),
-        typeof(System.Windows.Controls.DataGrid), typeof(SyncHorizontalScrollBehavior));
-
     public ScrollViewer? TargetScrollViewer
     {
         get => (ScrollViewer?)GetValue(TargetScrollViewerProperty);
         set => SetValue(TargetScrollViewerProperty, value);
     }
 
+    private bool _lockScroll;
+
     protected override void OnAttached()
     {
         base.OnAttached();
-        if (TargetScrollViewer is null) return;
-        SyncScrollViewer(AssociatedObject, TargetScrollViewer);
-        SyncScrollViewer(TargetScrollViewer, AssociatedObject);
+        AssociatedObject.ScrollChanged += OnSourceScrollChanged;
     }
 
-    private bool _lockScroll;
-
-    private void SyncScrollViewer(ScrollViewer source, ScrollViewer dest)
+    protected override void OnDetaching()
     {
-        source.ScrollChanged += (_, _) => { SyncScrollViewerImpl(source, dest); };
+        base.OnDetaching();
+        AssociatedObject.ScrollChanged -= OnSourceScrollChanged;
+    }
+
+    private void OnSourceScrollChanged(object sender, ScrollChangedEventArgs e)
+    {
+        if (e.HorizontalChange == 0 && e.ViewportWidthChange == 0) return;
+        SyncScrollViewerImpl(AssociatedObject, TargetScrollViewer);
     }
 
     public void SyncScrollViewer()
@@ -45,30 +45,15 @@ public class SyncHorizontalScrollBehavior : Behavior<ScrollViewer>
     {
         if (dest is null || _lockScroll) return;
 
-        var sourceScrollbar = FindClosestHorizontalScrollBar(source);
-        if (sourceScrollbar?.IsMouseCaptureWithin == false && source.HorizontalOffset == 0) return;
-
         _lockScroll = true;
-        if (Math.Abs(source.HorizontalOffset - source.ScrollableWidth) < 0.1)
-        {
-            var offset = source.ScrollableWidth - dest.ScrollableWidth;
-            source.ScrollToHorizontalOffset(source.HorizontalOffset - offset);
-        }
 
-        dest.ScrollToHorizontalOffset(source.HorizontalOffset);
+        // When source is at max scroll, snap dest to its own max to account for
+        // the small ScrollableWidth difference caused by border/scrollbar offsets.
+        var targetOffset = source.ScrollableWidth > 0 && source.HorizontalOffset >= source.ScrollableWidth
+            ? dest.ScrollableWidth
+            : source.HorizontalOffset;
+
+        dest.ScrollToHorizontalOffset(targetOffset);
         _lockScroll = false;
-    }
-
-    private static ScrollBar? FindClosestHorizontalScrollBar(DependencyObject prop)
-    {
-        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(prop); i++)
-        {
-            var child = VisualTreeHelper.GetChild(prop, i);
-            if (child is ScrollBar castedProp && castedProp.Orientation == Orientation.Horizontal) return castedProp;
-            var closestChild = FindClosestHorizontalScrollBar(child);
-            if (closestChild != null) return closestChild;
-        }
-
-        return null;
     }
 }

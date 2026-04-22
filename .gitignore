@@ -1,5 +1,8 @@
 # Project settings
 
+# Personal dev state (not committed)
+WORK.md
+
 # JetBrains IDE
 .idea/
 .run/

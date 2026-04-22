@@ -13,4 +13,5 @@ public class GroupInfo
   public int ColumnSpan { get ; set ; }
   public int RowSpan { get ; set ; }
   public bool IsFrozen { get ; set ; }
-} 
+  public bool IsVisible { get ; set ; } = true ;
+}

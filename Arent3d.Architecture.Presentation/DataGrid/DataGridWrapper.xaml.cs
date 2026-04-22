@@ -1,4 +1,7 @@
+using System;
+using System.Collections.Generic;
 using System.ComponentModel;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -120,7 +123,7 @@ public partial class DataGridWrapper
             ContentControl.Content = value;
             value.HeadersVisibility = DataGridHeadersVisibility.None;
             value.HorizontalAlignment = HorizontalAlignment.Left;
-            
+
             InitializeHeader();
             SetupScrollSynchronization();
         }
@@ -141,7 +144,7 @@ public partial class DataGridWrapper
         Unloaded += OnUnloaded;
     }
 
-    #endregion
+    #endregion/
 
     #region Event Handlers
 
@@ -188,7 +191,8 @@ public partial class DataGridWrapper
         {
             viewModel.PropertyChanged += (_, args) =>
             {
-                if (args.PropertyName == nameof(IDataGridContext.ColumnHeaders))
+                if (args.PropertyName == nameof(IDataGridContext.ColumnHeaders) ||
+                    args.PropertyName == nameof(IColumnVisibilityContext.ColumnVisibility))
                 {
                     InitializeHeader();
                 }
@@ -233,16 +237,19 @@ public partial class DataGridWrapper
         SetupEventHandlers();
         ClearHeaders();
 
+        var hiddenColumns = GetHiddenLeafColumns(DataContext as IColumnVisibilityContext, DataGrid.Columns.Count, FrozenColumnCount);
+        ApplyColumnVisibility(hiddenColumns);
+
         var groups =
-            _headerGridBuilder.BuildHeaderGrid(context, DataGrid, Header, FrozenHeader, FrozenColumnCount, out _numberOfRows, out _numberOfColumns);
+            _headerGridBuilder.BuildHeaderGrid(context, DataGrid, Header, FrozenHeader, FrozenColumnCount, hiddenColumns, out _numberOfRows, out _numberOfColumns);
 
         if (_numberOfRows == 0)
             return;
 
         SetupDataGridBorder();
-        var groupInfos = _headerGridBuilder.CreateGroupInfos(groups, _numberOfRows, _numberOfColumns, FrozenColumnCount);
+        var groupInfos = _headerGridBuilder.CreateGroupInfos(groups, _numberOfRows, _numberOfColumns, FrozenColumnCount, hiddenColumns);
         _headerContentBuilder.CreateHeaderContent(groupInfos, Header, FrozenHeader, this, FrozenColumnCount);
-        if (FrozenColumnCount > 0 )FrozenHeader.Margin = new Thickness(0,0,1,0);
+        if (FrozenColumnCount > 0) FrozenHeader.Margin = new Thickness(0, 0, 1, 0);
     }
 
     #endregion
@@ -309,13 +316,13 @@ public partial class DataGridWrapper
     private void AdjustHeaderScrollViewerWidth(ScrollViewer dataGridScrollViewer)
     {
         double availableWidth = ActualWidth;
-        
+
         // Subtract frozen column width
         if (FrozenColumnCount > 0)
         {
             availableWidth -= FrozenColumnDefinition.Width.Value;
         }
-        
+
         if (dataGridScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible)
         {
             var scrollBarWidth = SystemParameters.VerticalScrollBarWidth;
@@ -329,6 +336,27 @@ public partial class DataGridWrapper
 
     internal int NumberOfRows => _numberOfRows;
     internal int NumberOfColumns => _numberOfColumns;
+
+    private static HashSet<int> GetHiddenLeafColumns(IColumnVisibilityContext? context, int totalColumns, int frozenColumnCount)
+    {
+        if (context?.ColumnVisibility is not { } dict)
+            return [];
+
+        return dict
+            .Where(kv => !kv.Value && kv.Key >= frozenColumnCount && kv.Key < totalColumns)
+            .Select(kv => kv.Key)
+            .ToHashSet();
+    }
+
+    private void ApplyColumnVisibility(HashSet<int> hiddenColumns)
+    {
+        for (var i = 0; i < DataGrid.Columns.Count; i++)
+        {
+            DataGrid.Columns[i].Visibility = hiddenColumns.Contains(i)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
+    }
 
     #endregion
 }

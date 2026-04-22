@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
@@ -10,21 +13,21 @@ public class HeaderGridBuilder : IHeaderGridBuilder
     private const double BorderOffset = 0;
 
     public string[][] BuildHeaderGrid(IDataGridContext context, System.Windows.Controls.DataGrid dataGrid, Grid header,
-        Grid frozenHeader, int frozenColumnCount,
+        Grid frozenHeader, int frozenColumnCount, HashSet<int> hiddenColumns,
         out int numberOfRows, out int numberOfColumns)
     {
         var groupList = context.ColumnHeaders;
         numberOfRows = groupList.Where(x => x is not null).Max(x => x!.Length);
         numberOfColumns = dataGrid.Columns.Count;
 
-        CreateColumnDefinitions(dataGrid, header, frozenHeader, frozenColumnCount);
+        CreateColumnDefinitions(dataGrid, header, frozenHeader, frozenColumnCount, hiddenColumns);
         CreateRowDefinitions(header, frozenHeader, numberOfRows);
 
         return groupList;
     }
 
     public Dictionary<string, GroupInfo> CreateGroupInfos(string[][] groupList, int numberOfRows, int numberOfColumns,
-        int frozenColumnCount)
+        int frozenColumnCount, HashSet<int> hiddenColumns)
     {
         var groupMap = new Dictionary<string, GroupInfo>();
 
@@ -64,34 +67,57 @@ public class HeaderGridBuilder : IHeaderGridBuilder
             }
         }
 
+        if (hiddenColumns.Count > 0)
+            ApplyVisibility(groupMap, numberOfRows, hiddenColumns);
+
         return groupMap;
     }
 
+    private static void ApplyVisibility(Dictionary<string, GroupInfo> groupMap, int numberOfRows, HashSet<int> hiddenColumns)
+    {
+        foreach (var group in groupMap.Values)
+        {
+            if (group.IsFrozen) continue;
+
+            var isLeaf = group.RowIndex + group.RowSpan >= numberOfRows;
+            group.IsVisible = isLeaf
+                ? !hiddenColumns.Contains(group.ColumnIndex)
+                : Enumerable.Range(group.ColumnIndex, Math.Max(group.ColumnSpan, 1)).Any(col => !hiddenColumns.Contains(col));
+        }
+    }
+
     private void CreateColumnDefinitions(System.Windows.Controls.DataGrid dataGrid, Grid header, Grid frozenHeader,
-        int frozenColumnCount)
+        int frozenColumnCount, HashSet<int> hiddenColumns)
     {
         // Create column definitions for frozen header
-        CreateColumnDefinitionsForRange(dataGrid, frozenHeader, 0, frozenColumnCount, frozenColumnCount - 1);
+        CreateColumnDefinitionsForRange(dataGrid, frozenHeader, 0, frozenColumnCount, frozenColumnCount - 1, hiddenColumns);
 
         // Create column definitions for scrollable header
         CreateColumnDefinitionsForRange(dataGrid, header, frozenColumnCount, dataGrid.Columns.Count,
-            dataGrid.Columns.Count - 1);
+            dataGrid.Columns.Count - 1, hiddenColumns);
     }
 
     private void CreateColumnDefinitionsForRange(System.Windows.Controls.DataGrid dataGrid, Grid targetGrid,
-        int startIndex, int endIndex, int lastColumnIndex)
+        int startIndex, int endIndex, int lastColumnIndex, HashSet<int> hiddenColumns)
     {
         for (var i = startIndex; i < endIndex && i < dataGrid.Columns.Count; i++)
         {
-            var column = dataGrid.Columns[i];
             var columnDefinition = new ColumnDefinition();
-            var isLastColumn = i == lastColumnIndex;
-            var binding = new Binding(nameof(column.ActualWidth))
+            if (hiddenColumns.Contains(i))
             {
-                Source = column,
-                Converter = new DoubleToDataGridLengthConverter() { Offset = isLastColumn ? BorderOffset : 0 }
-            };
-            BindingOperations.SetBinding(columnDefinition, ColumnDefinition.WidthProperty, binding);
+                columnDefinition.Width = new GridLength(0);
+            }
+            else
+            {
+                var column = dataGrid.Columns[i];
+                var isLastColumn = i == lastColumnIndex;
+                var binding = new Binding(nameof(column.ActualWidth))
+                {
+                    Source = column,
+                    Converter = new DoubleToDataGridLengthConverter() { Offset = isLastColumn ? BorderOffset : 0 }
+                };
+                BindingOperations.SetBinding(columnDefinition, ColumnDefinition.WidthProperty, binding);
+            }
             targetGrid.ColumnDefinitions.Add(columnDefinition);
         }
     }
