@@ -4,6 +4,7 @@ using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Data;
+using System.Windows.Media;
 using Arent3d.Architecture.Presentation.Converters;
 
 namespace Arent3d.Architecture.Presentation.DataGrid;
@@ -27,9 +28,12 @@ public class HeaderGridBuilder : IHeaderGridBuilder
     }
 
     public Dictionary<string, GroupInfo> CreateGroupInfos(string[][] groupList, int numberOfRows, int numberOfColumns,
-        int frozenColumnCount, HashSet<int> hiddenColumns)
+        int frozenColumnCount, HashSet<int> hiddenColumns, GroupBackgroundCollection? groupBackgrounds)
     {
+        var backgroundLookup = groupBackgrounds?.ToDictionary(e => e.GroupIndex, e => e.Background);
         var groupMap = new Dictionary<string, GroupInfo>();
+        var topGroupKeys = new Dictionary<string, int>();
+        var topGroupCounter = 0;
 
         for (var columnIndex = 0; columnIndex < groupList.Length; columnIndex++)
         {
@@ -38,16 +42,28 @@ public class HeaderGridBuilder : IHeaderGridBuilder
             var isFirstCreation = true;
             var rowIndex = 0;
             var prefix = string.Empty;
+            int? topLevelGroupIdx = null;
 
             for (var index = 0; index < strGroups.Length; index++)
             {
                 var groupName = strGroups[index];
                 var key = prefix + "." + groupName;
 
+                if (index == 0)
+                {
+                    if (!topGroupKeys.TryGetValue(key, out var existingIdx))
+                    {
+                        existingIdx = topGroupCounter++;
+                        topGroupKeys[key] = existingIdx;
+                    }
+                    topLevelGroupIdx = existingIdx;
+                }
+
                 if (!groupMap.TryGetValue(key, out var group))
                 {
                     group = CreateNewGroup(groupName, columnIndex, rowIndex, numberOfRows, strGroups.Length,
                         isFirstCreation, frozenColumnCount);
+                    group.Background = topLevelGroupIdx.HasValue && backgroundLookup != null && backgroundLookup.TryGetValue(topLevelGroupIdx.Value, out var bg) ? bg : null;
                     groupMap[key] = group;
                 }
 
@@ -57,11 +73,11 @@ public class HeaderGridBuilder : IHeaderGridBuilder
                 prefix = key;
                 isFirstCreation = false;
             }
-            
-            if(!groups.Any()) continue;
-            
-            var remainingRows = numberOfRows - groups.Sum( x => x.RowSpan);
-            if (remainingRows > 0 )
+
+            if (!groups.Any()) continue;
+
+            var remainingRows = numberOfRows - groups.Sum(x => x.RowSpan);
+            if (remainingRows > 0)
             {
                 groups.Last().RowSpan += remainingRows;
             }
@@ -89,10 +105,7 @@ public class HeaderGridBuilder : IHeaderGridBuilder
     private void CreateColumnDefinitions(System.Windows.Controls.DataGrid dataGrid, Grid header, Grid frozenHeader,
         int frozenColumnCount, HashSet<int> hiddenColumns)
     {
-        // Create column definitions for frozen header
         CreateColumnDefinitionsForRange(dataGrid, frozenHeader, 0, frozenColumnCount, frozenColumnCount - 1, hiddenColumns);
-
-        // Create column definitions for scrollable header
         CreateColumnDefinitionsForRange(dataGrid, header, frozenColumnCount, dataGrid.Columns.Count,
             dataGrid.Columns.Count - 1, hiddenColumns);
     }
@@ -129,24 +142,22 @@ public class HeaderGridBuilder : IHeaderGridBuilder
             header.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             frozenHeader.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
         }
-        
+
         header.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
-        frozenHeader.RowDefinitions.Add(new RowDefinition { Height =  new GridLength(1, GridUnitType.Star) });
+        frozenHeader.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
     }
 
     private GroupInfo CreateNewGroup(string groupName, int columnIndex, int rowIndex, int numberOfRows,
         int groupsLength, bool isFirstCreation, int frozenColumnCount)
     {
         var rowSpan = CalculateRowSpan(isFirstCreation, numberOfRows, groupsLength);
-        var newGroup = new GroupInfo(groupName)
+        return new GroupInfo(groupName)
         {
             ColumnIndex = columnIndex,
             RowIndex = rowIndex,
             RowSpan = rowSpan,
             IsFrozen = columnIndex < frozenColumnCount
         };
-
-        return newGroup;
     }
 
     private int CalculateRowSpan(bool isFirstCreation, int numberOfRows, int groupsLength)

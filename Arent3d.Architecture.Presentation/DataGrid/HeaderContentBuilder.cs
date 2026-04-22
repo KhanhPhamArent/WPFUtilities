@@ -67,7 +67,7 @@ public class HeaderContentBuilder : IHeaderContentBuilder
         var borderThickness = wrapper.HeaderThickness / 2;
         var thickness = CalculateBorderThickness(groupInfo, borderThickness, wrapper.NumberOfRows, wrapper.NumberOfColumns);
 
-        var border = new Border { BorderBrush = wrapper.HeaderBorderColor, BorderThickness = thickness, Background = wrapper.HeaderBackground };
+        var border = new Border { BorderBrush = wrapper.HeaderBorderColor, BorderThickness = thickness, Background = groupInfo.Background ?? wrapper.HeaderBackground };
 
         return border;
     }

@@ -100,6 +100,16 @@ public partial class DataGridWrapper
         set => SetValue(FrozenColumnCountProperty, value);
     }
 
+    public static readonly DependencyProperty GroupBackgroundsProperty =
+        DependencyProperty.Register(nameof(GroupBackgrounds), typeof(GroupBackgroundCollection), typeof(DataGridWrapper),
+            new PropertyMetadata(null, OnHeaderPropertyChanged));
+
+    public GroupBackgroundCollection? GroupBackgrounds
+    {
+        get => (GroupBackgroundCollection?)GetValue(GroupBackgroundsProperty);
+        set => SetValue(GroupBackgroundsProperty, value);
+    }
+
     #endregion
 
     #region Private Fields
@@ -184,6 +194,7 @@ public partial class DataGridWrapper
         }
     }
 
+
     private void OnDataContextChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
         InitializeHeader();
@@ -247,7 +258,7 @@ public partial class DataGridWrapper
             return;
 
         SetupDataGridBorder();
-        var groupInfos = _headerGridBuilder.CreateGroupInfos(groups, _numberOfRows, _numberOfColumns, FrozenColumnCount, hiddenColumns);
+        var groupInfos = _headerGridBuilder.CreateGroupInfos(groups, _numberOfRows, _numberOfColumns, FrozenColumnCount, hiddenColumns, GroupBackgrounds);
         _headerContentBuilder.CreateHeaderContent(groupInfos, Header, FrozenHeader, this, FrozenColumnCount);
         if (FrozenColumnCount > 0) FrozenHeader.Margin = new Thickness(0, 0, 1, 0);
     }
