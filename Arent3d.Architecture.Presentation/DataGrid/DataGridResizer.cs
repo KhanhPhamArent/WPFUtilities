@@ -14,24 +14,23 @@ public class DataGridResizer : IDataGridResizer
         if (dataGrid.Columns.Count == 0)
             return;
 
-        var availableWidth = CalculateAvailableWidth(dataGrid, scrollViewer, actualWidth);
-        var lastColumn = dataGrid.Columns.Last();
+        var lastVisibleColumn = dataGrid.Columns.LastOrDefault(c => c.Visibility == Visibility.Visible);
+        if (lastVisibleColumn == null)
+            return;
 
-        // Ensure minimum width is respected
-        var finalWidth = Math.Max(availableWidth, lastColumn.MinWidth);
-        lastColumn.Width = new DataGridLength(finalWidth);
+        var availableWidth = CalculateAvailableWidth(dataGrid, lastVisibleColumn, scrollViewer, actualWidth);
+        var finalWidth = Math.Max(availableWidth, lastVisibleColumn.MinWidth);
+        lastVisibleColumn.Width = new DataGridLength(finalWidth);
     }
 
-    private double CalculateAvailableWidth(System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth)
+    private double CalculateAvailableWidth(System.Windows.Controls.DataGrid dataGrid, DataGridColumn lastVisibleColumn, ScrollViewer scrollViewer, double actualWidth)
     {
-        if (dataGrid.Columns.Count <= 1)
-            return actualWidth - BorderOffset - GetScrollBarOffset(scrollViewer);
-
-        // Calculate width of all columns except the last one
-        var columnWidths = dataGrid.Columns.Take(dataGrid.Columns.Count - 1).Sum(x => x.ActualWidth);
+        var otherVisibleWidth = dataGrid.Columns
+            .Where(c => c.Visibility == Visibility.Visible && c != lastVisibleColumn)
+            .Sum(x => x.ActualWidth);
         var scrollBarOffset = GetScrollBarOffset(scrollViewer);
 
-        return actualWidth - columnWidths - BorderOffset - scrollBarOffset;
+        return actualWidth - otherVisibleWidth - BorderOffset - scrollBarOffset;
     }
 
     private double GetScrollBarOffset(ScrollViewer scrollViewer)

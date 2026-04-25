@@ -13,6 +13,7 @@ public partial class DataGridWrapper
     private const double DefaultHeaderThickness = 2.0;
     private const double DefaultHeaderTextMargin = 3.0;
     private const double DefaultHeaderTextMarginVertical = 5.0;
+    private const double MaxFrozenWidthRatio = 0.7;
 
     // Get the DataGrid's built-in ScrollViewer
     public ScrollViewer? MainScrollViewer => _scrollViewerHandler?.DataGridScrollViewer;
@@ -318,7 +319,8 @@ public partial class DataGridWrapper
         double frozenWidth = 0;
         for (int i = 0; i < FrozenColumnCount && i < DataGrid.Columns.Count; i++)
         {
-            frozenWidth += DataGrid.Columns[i].ActualWidth;
+            if (DataGrid.Columns[i].Visibility == Visibility.Visible)
+                frozenWidth += DataGrid.Columns[i].ActualWidth;
         }
 
         FrozenColumnDefinition.Width = new GridLength(frozenWidth);
@@ -328,21 +330,29 @@ public partial class DataGridWrapper
     {
         double availableWidth = ActualWidth;
 
-        // Subtract frozen column width
         if (FrozenColumnCount > 0)
         {
-            availableWidth -= FrozenColumnDefinition.Width.Value;
+            var frozenWidth = FrozenColumnDefinition.Width.Value;
+            if (frozenWidth > ActualWidth * MaxFrozenWidthRatio)
+            {
+                // Use DataGrid's actual content area instead
+                frozenWidth = dataGridScrollViewer.ViewportWidth;
+            }
+            availableWidth -= frozenWidth;
         }
 
+        double newWidth;
         if (dataGridScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible)
         {
             var scrollBarWidth = SystemParameters.VerticalScrollBarWidth;
-            HeaderScrollViewer.Width = availableWidth - scrollBarWidth - 3;
+            newWidth = availableWidth - scrollBarWidth - 3;
         }
         else
         {
-            HeaderScrollViewer.Width = availableWidth;
+            newWidth = availableWidth;
         }
+
+        HeaderScrollViewer.Width = newWidth;
     }
 
     internal int NumberOfRows => _numberOfRows;
@@ -363,9 +373,12 @@ public partial class DataGridWrapper
     {
         for (var i = 0; i < DataGrid.Columns.Count; i++)
         {
-            DataGrid.Columns[i].Visibility = hiddenColumns.Contains(i)
-                ? Visibility.Collapsed
-                : Visibility.Visible;
+            var newVis = hiddenColumns.Contains(i) ? Visibility.Collapsed : Visibility.Visible;
+            var oldVis = DataGrid.Columns[i].Visibility;
+            if (oldVis != newVis)
+            {
+                DataGrid.Columns[i].Visibility = newVis;
+            }
         }
     }
 
