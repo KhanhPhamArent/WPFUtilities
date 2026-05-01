@@ -13,8 +13,6 @@ public partial class DataGridWrapper
     private const double DefaultHeaderThickness = 2.0;
     private const double DefaultHeaderTextMargin = 3.0;
     private const double DefaultHeaderTextMarginVertical = 5.0;
-    private const double MaxFrozenWidthRatio = 0.7;
-
     // Get the DataGrid's built-in ScrollViewer
     public ScrollViewer? MainScrollViewer => _scrollViewerHandler?.DataGridScrollViewer;
 
@@ -121,6 +119,7 @@ public partial class DataGridWrapper
     private int _numberOfRows;
     private int _numberOfColumns;
     private DataGridScrollViewerHandler? _scrollViewerHandler;
+    private DataGridColumn? _placeholderColumn;
 
     #endregion
 
@@ -135,7 +134,9 @@ public partial class DataGridWrapper
             value.HeadersVisibility = DataGridHeadersVisibility.None;
             value.HorizontalAlignment = HorizontalAlignment.Left;
 
+            AddPlaceholderColumn(value);
             InitializeHeader();
+            UpdateFrozenColumnWidth();
             SetupScrollSynchronization();
         }
     }
@@ -249,7 +250,10 @@ public partial class DataGridWrapper
         SetupEventHandlers();
         ClearHeaders();
 
-        var hiddenColumns = GetHiddenLeafColumns(DataContext as IColumnVisibilityContext, DataGrid.Columns.Count, FrozenColumnCount);
+        var realColumnCount = _placeholderColumn != null ? DataGrid.Columns.Count - 1 : DataGrid.Columns.Count;
+        var hiddenColumns = GetHiddenLeafColumns(DataContext as IColumnVisibilityContext, realColumnCount, FrozenColumnCount);
+        if (_placeholderColumn != null)
+            hiddenColumns.Add(DataGrid.Columns.IndexOf(_placeholderColumn));
         ApplyColumnVisibility(hiddenColumns);
 
         var groups =
@@ -304,9 +308,9 @@ public partial class DataGridWrapper
         var scrollViewer = _scrollViewerHandler?.DataGridScrollViewer;
         if (scrollViewer != null)
         {
+            _dataGridResizer.SyncColumnWidths(DataGrid, scrollViewer, ActualWidth - 3);
             AdjustHeaderScrollViewerWidth(scrollViewer);
-            _dataGridResizer.ResizeLastColumn(DataGrid, scrollViewer, ActualWidth - 3);
-            UpdateFrozenColumnWidth();
+            ClampHorizontalOffset(scrollViewer);
             _scrollViewerHandler?.ExecuteSync();
         }
     }
@@ -326,33 +330,26 @@ public partial class DataGridWrapper
         FrozenColumnDefinition.Width = new GridLength(frozenWidth);
     }
 
+    private void ClampHorizontalOffset(ScrollViewer scrollViewer)
+    {
+        var actualExtentWidth = DataGrid.Columns
+            .Where(c => c.Visibility == Visibility.Visible)
+            .Sum(c => c.ActualWidth);
+        var maxOffset = Math.Max(0, actualExtentWidth - scrollViewer.ViewportWidth);
+        if (scrollViewer.HorizontalOffset > maxOffset)
+            scrollViewer.ScrollToHorizontalOffset(maxOffset);
+    }
+
     private void AdjustHeaderScrollViewerWidth(ScrollViewer dataGridScrollViewer)
     {
-        double availableWidth = ActualWidth;
-
-        if (FrozenColumnCount > 0)
-        {
-            var frozenWidth = FrozenColumnDefinition.Width.Value;
-            if (frozenWidth > ActualWidth * MaxFrozenWidthRatio)
-            {
-                // Use DataGrid's actual content area instead
-                frozenWidth = dataGridScrollViewer.ViewportWidth;
-            }
-            availableWidth -= frozenWidth;
-        }
-
-        double newWidth;
-        if (dataGridScrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible)
-        {
-            var scrollBarWidth = SystemParameters.VerticalScrollBarWidth;
-            newWidth = availableWidth - scrollBarWidth - 3;
-        }
-        else
-        {
-            newWidth = availableWidth;
-        }
-
-        HeaderScrollViewer.Width = newWidth;
+        var extentWidth = dataGridScrollViewer.ExtentWidth;
+        var viewportWidth = dataGridScrollViewer.ViewportWidth;
+        if (extentWidth <= 0 || viewportWidth <= 0) return;
+        // Pin the Header Grid's content width to the DataGrid's scrollable extent so that
+        // HeaderScrollViewer.ScrollableWidth = extentWidth - viewportWidth = DataGrid.ScrollableWidth,
+        // independent of whether column bindings in Header have settled after a visibility change.
+        Header.Width = extentWidth;
+        HeaderScrollViewer.Width = viewportWidth;
     }
 
     internal int NumberOfRows => _numberOfRows;
@@ -371,15 +368,43 @@ public partial class DataGridWrapper
 
     private void ApplyColumnVisibility(HashSet<int> hiddenColumns)
     {
+        var placeholderIndex = _placeholderColumn != null ? DataGrid.Columns.IndexOf(_placeholderColumn) : -1;
+
         for (var i = 0; i < DataGrid.Columns.Count; i++)
         {
+            if (i == placeholderIndex) continue;
             var newVis = hiddenColumns.Contains(i) ? Visibility.Collapsed : Visibility.Visible;
-            var oldVis = DataGrid.Columns[i].Visibility;
-            if (oldVis != newVis)
-            {
+            if (DataGrid.Columns[i].Visibility != newVis)
                 DataGrid.Columns[i].Visibility = newVis;
-            }
         }
+
+        UpdatePlaceholderVisibility(placeholderIndex);
+        Resize();
+    }
+
+    private void UpdatePlaceholderVisibility(int placeholderIndex)
+    {
+        if (_placeholderColumn == null || placeholderIndex < 0) return;
+
+        var anyNonFrozenVisible = DataGrid.Columns
+            .Take(placeholderIndex)
+            .Skip(FrozenColumnCount)
+            .Any(c => c.Visibility == Visibility.Visible);
+
+        _placeholderColumn.Visibility = anyNonFrozenVisible ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    private void AddPlaceholderColumn(System.Windows.Controls.DataGrid dataGrid)
+    {
+        _placeholderColumn = new DataGridTextColumn
+        {
+            Visibility = Visibility.Collapsed,
+            CanUserResize = false,
+            CanUserSort = false,
+            CanUserReorder = false,
+            IsReadOnly = true,
+        };
+        dataGrid.Columns.Add(_placeholderColumn);
     }
 
     #endregion

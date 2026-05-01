@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -8,18 +9,38 @@ namespace Arent3d.Architecture.Presentation.DataGrid;
 public class DataGridResizer : IDataGridResizer
 {
     private const double BorderOffset = 2.0;
+    private readonly Dictionary<DataGridColumn, double> _originalWidths = new();
+    private DataGridColumn? _previousLastColumn;
 
-    public void ResizeLastColumn(System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth)
+    public void SyncColumnWidths(System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth)
     {
         if (dataGrid.Columns.Count == 0)
             return;
 
-        var lastVisibleColumn = dataGrid.Columns.LastOrDefault(c => c.Visibility == Visibility.Visible);
-        if (lastVisibleColumn == null)
+        var visibleColumns = dataGrid.Columns.Where(c => c.Visibility == Visibility.Visible).ToList();
+        if (visibleColumns.Count == 0)
             return;
 
+        var lastVisibleColumn = visibleColumns.Last();
+
+        // Store original width of last column on first encounter
+        if (!_originalWidths.ContainsKey(lastVisibleColumn))
+            _originalWidths[lastVisibleColumn] = lastVisibleColumn.ActualWidth;
+
+        // When last column changes, restore the previous last column to its original width
+        if (_previousLastColumn != null
+            && _previousLastColumn != lastVisibleColumn
+            && _previousLastColumn.Visibility == Visibility.Visible
+            && _originalWidths.TryGetValue(_previousLastColumn, out var originalWidth))
+        {
+            _previousLastColumn.Width = new DataGridLength(originalWidth);
+        }
+
+        _previousLastColumn = lastVisibleColumn;
+
+        // Resize last column to fill available space
         var availableWidth = CalculateAvailableWidth(dataGrid, lastVisibleColumn, scrollViewer, actualWidth);
-        var finalWidth = Math.Max(availableWidth, lastVisibleColumn.MinWidth);
+        var finalWidth = Math.Max(availableWidth, _originalWidths[lastVisibleColumn]);
         lastVisibleColumn.Width = new DataGridLength(finalWidth);
     }
 
@@ -35,21 +56,11 @@ public class DataGridResizer : IDataGridResizer
 
     private double GetScrollBarOffset(ScrollViewer scrollViewer)
     {
-        var verticalScrollBarOffset = scrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? GetScrollBarWidth() : 0;
-        var horizontalScrollBarOffset = scrollViewer.ComputedHorizontalScrollBarVisibility == Visibility.Visible ? GetScrollBarHeight() : 0;
-
-        // For DataGrid, we typically only need to account for vertical scrollbar
-        // Horizontal scrollbar is usually handled differently
-        return verticalScrollBarOffset;
+        return scrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? GetScrollBarWidth() : 0;
     }
 
     private double GetScrollBarWidth()
     {
         return SystemParameters.VerticalScrollBarWidth;
-    }
-
-    private double GetScrollBarHeight()
-    {
-        return SystemParameters.HorizontalScrollBarHeight;
     }
 }

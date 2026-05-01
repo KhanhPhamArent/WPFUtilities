@@ -4,5 +4,5 @@ namespace Arent3d.Architecture.Presentation.DataGrid ;
 
 public interface IDataGridResizer
 {
-  void ResizeLastColumn( System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth ) ;
+  void SyncColumnWidths( System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth ) ;
 } 

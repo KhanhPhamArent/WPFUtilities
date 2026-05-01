@@ -130,10 +130,15 @@ public class HeaderGridBuilder : IHeaderGridBuilder
             {
                 var column = dataGrid.Columns[i];
                 var isLastColumn = i == lastColumnIndex;
+                var offset = isLastColumn ? BorderOffset : 0;
+                var fallbackPixels = column.Width.IsAbsolute ? column.Width.Value
+                    : column.ActualWidth > 0 ? column.ActualWidth
+                    : column.MinWidth;
                 var binding = new Binding(nameof(column.ActualWidth))
                 {
                     Source = column,
-                    Converter = new DoubleToDataGridLengthConverter() { Offset = isLastColumn ? BorderOffset : 0 }
+                    Converter = new DoubleToDataGridLengthConverter() { Offset = offset },
+                    FallbackValue = new GridLength(fallbackPixels + offset)
                 };
                 BindingOperations.SetBinding(columnDefinition, ColumnDefinition.WidthProperty, binding);
             }
