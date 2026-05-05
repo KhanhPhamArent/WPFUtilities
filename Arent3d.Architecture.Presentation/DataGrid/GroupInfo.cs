@@ -1,16 +1,20 @@
-namespace Arent3d.Architecture.Presentation.DataGrid ;
+using System.Windows.Media;
+
+namespace Arent3d.Architecture.Presentation.DataGrid;
 
 public class GroupInfo
 {
-  public GroupInfo( string name )
-  {
-    Name = name ;
-  }
+    public GroupInfo(string name)
+    {
+        Name = name;
+    }
 
-  public string Name { get ; }
-  public int ColumnIndex { get ; set ; }
-  public int RowIndex { get ; set ; }
-  public int ColumnSpan { get ; set ; }
-  public int RowSpan { get ; set ; }
-  public bool IsFrozen { get ; set ; }
-} 
+    public string Name { get; }
+    public int ColumnIndex { get; set; }
+    public int RowIndex { get; set; }
+    public int ColumnSpan { get; set; }
+    public int RowSpan { get; set; }
+    public bool IsFrozen { get; set; }
+    public bool IsVisible { get; set; } = true;
+    public Brush? Background { get; set; }
+}

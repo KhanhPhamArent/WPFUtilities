@@ -1,54 +1,66 @@
-using System.Windows ;
-using System.Windows.Controls ;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
 
-namespace Arent3d.Architecture.Presentation.DataGrid ;
+namespace Arent3d.Architecture.Presentation.DataGrid;
 
 public class DataGridResizer : IDataGridResizer
 {
-  private const double BorderOffset = 2.0 ;
+    private const double BorderOffset = 2.0;
+    private readonly Dictionary<DataGridColumn, double> _originalWidths = new();
+    private DataGridColumn? _previousLastColumn;
 
-  public void ResizeLastColumn( System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth )
-  {
-    if ( dataGrid.Columns.Count == 0 )
-      return ;
+    public void SyncColumnWidths(System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth)
+    {
+        if (dataGrid.Columns.Count == 0)
+            return;
 
-    var availableWidth = CalculateAvailableWidth( dataGrid, scrollViewer, actualWidth ) ;
-    var lastColumn = dataGrid.Columns.Last() ;
+        var visibleColumns = dataGrid.Columns.Where(c => c.Visibility == Visibility.Visible).ToList();
+        if (visibleColumns.Count == 0)
+            return;
 
-    // Ensure minimum width is respected
-    var finalWidth = Math.Max( availableWidth, lastColumn.MinWidth ) ;
-    lastColumn.Width = new DataGridLength( finalWidth ) ;
-  }
+        var lastVisibleColumn = visibleColumns.Last();
 
-  private double CalculateAvailableWidth( System.Windows.Controls.DataGrid dataGrid, ScrollViewer scrollViewer, double actualWidth )
-  {
-    if ( dataGrid.Columns.Count <= 1 )
-      return actualWidth - BorderOffset - GetScrollBarOffset( scrollViewer ) ;
+        // Store original width of last column on first encounter
+        if (!_originalWidths.ContainsKey(lastVisibleColumn))
+            _originalWidths[lastVisibleColumn] = lastVisibleColumn.ActualWidth;
 
-    // Calculate width of all columns except the last one
-    var columnWidths = dataGrid.Columns.Take( dataGrid.Columns.Count - 1 ).Sum( x => x.ActualWidth ) ;
-    var scrollBarOffset = GetScrollBarOffset( scrollViewer ) ;
+        // When last column changes, restore the previous last column to its original width
+        if (_previousLastColumn != null
+            && _previousLastColumn != lastVisibleColumn
+            && _previousLastColumn.Visibility == Visibility.Visible
+            && _originalWidths.TryGetValue(_previousLastColumn, out var originalWidth))
+        {
+            _previousLastColumn.Width = new DataGridLength(originalWidth);
+        }
 
-    return actualWidth - columnWidths - BorderOffset - scrollBarOffset ;
-  }
+        _previousLastColumn = lastVisibleColumn;
 
-  private double GetScrollBarOffset( ScrollViewer scrollViewer )
-  {
-    var verticalScrollBarOffset = scrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? GetScrollBarWidth() : 0 ;
-    var horizontalScrollBarOffset = scrollViewer.ComputedHorizontalScrollBarVisibility == Visibility.Visible ? GetScrollBarHeight() : 0 ;
+        // Resize last column to fill available space
+        var availableWidth = CalculateAvailableWidth(dataGrid, lastVisibleColumn, scrollViewer, actualWidth);
+        var finalWidth = Math.Max(availableWidth, _originalWidths[lastVisibleColumn]);
+        lastVisibleColumn.Width = new DataGridLength(finalWidth);
+    }
 
-    // For DataGrid, we typically only need to account for vertical scrollbar
-    // Horizontal scrollbar is usually handled differently
-    return verticalScrollBarOffset ;
-  }
+    private double CalculateAvailableWidth(System.Windows.Controls.DataGrid dataGrid, DataGridColumn lastVisibleColumn, ScrollViewer scrollViewer, double actualWidth)
+    {
+        var otherVisibleWidth = dataGrid.Columns
+            .Where(c => c.Visibility == Visibility.Visible && c != lastVisibleColumn)
+            .Sum(x => x.ActualWidth);
+        var scrollBarOffset = GetScrollBarOffset(scrollViewer);
 
-  private double GetScrollBarWidth()
-  {
-    return SystemParameters.VerticalScrollBarWidth ;
-  }
+        return actualWidth - otherVisibleWidth - BorderOffset - scrollBarOffset;
+    }
 
-  private double GetScrollBarHeight()
-  {
-    return SystemParameters.HorizontalScrollBarHeight ;
-  }
+    private double GetScrollBarOffset(ScrollViewer scrollViewer)
+    {
+        return scrollViewer.ComputedVerticalScrollBarVisibility == Visibility.Visible ? GetScrollBarWidth() : 0;
+    }
+
+    private double GetScrollBarWidth()
+    {
+        return SystemParameters.VerticalScrollBarWidth;
+    }
 }

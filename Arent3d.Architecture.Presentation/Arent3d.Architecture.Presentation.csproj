@@ -1,11 +1,12 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
     <PropertyGroup>
+        <UseWPF>true</UseWPF>
+        <LangVersion>12</LangVersion>
+        <Configurations>Debug;Release;Debug 2024</Configurations>
+        <Platforms>AnyCPU;x64</Platforms>
         <TargetFramework>net48</TargetFramework>
         <Nullable>enable</Nullable>
-        <UseWPF>true</UseWPF>
-        <ImplicitUsings>enable</ImplicitUsings>
-        <LangVersion>12</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
